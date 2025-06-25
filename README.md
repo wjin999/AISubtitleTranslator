@@ -1,7 +1,5 @@
 # AISubtitleTranslator
 
-[English](#english) | [中文](#中文) | [日本語](#日本語)
-
 ---
 
 ### English
