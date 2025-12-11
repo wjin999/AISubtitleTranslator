@@ -1,5 +1,28 @@
-# AISubtitleTranslator
+# AI Subtitle Translator (Async + spaCy)
 
-This project is a product of vibe coding.
+这是一个基于 Python 的 SRT 字幕翻译工具，调用 OpenAI 兼容接口（如 DeepSeek）进行翻译。它结合了异步并发处理与 NLP 自然语言处理技术，旨在提供高效且上下文连贯的字幕翻译体验。
 
-The script's advantage lies in its unique two-step translation process: it first generates a summary of the entire text to grasp the overall context, and then provides this summary as background information while translating smaller segments. This method greatly enhances contextual coherence and cleverly avoids the issue of sending overly long prompts to the API.
+## 功能特点
+
+* 异步并发：使用 Python `asyncio` 库实现多协程并发请求，大幅减少 API 等待时间，显著提升翻译速度。
+* 智能断句合并：集成 `spaCy` NLP 模型，根据句法结构和时间轴间隔自动合并被切断的字幕行（如跨行长难句），提升翻译的语义完整性。
+* 上下文感知：在翻译时自动注入剧情摘要、上文和下文信息，有效解决多义词、代词指代及语气连贯性问题。
+* 术语表支持：支持加载外部术语表（格式为 `Term=Translation`），并在翻译时动态注入 Prompt，确保专有名词翻译的一致性。
+* 鲁棒性设计: 强制模型输出 JSON 结构化数据，防止传统机器翻译常见的漏行、错行或格式混乱问题。
+
+## 参数说明
+
+| 参数 | 说明 | 默认值 |
+| :--- | :--- | :--- |
+| `input_path` | (必填) 输入的 SRT 字幕文件路径。 | - |
+| `output_path` | (可选) 输出文件路径。如果不填，默认保存在同目录下，前缀为 `translated_`。 | None |
+| `--glossary` | 外部术语表文件的路径（文本格式，每行 `英文=中文`）。 | None |
+| `--no-merge` | [开关] 禁用 spaCy 智能合并功能。开启后将严格按照原始字幕行进行逐行翻译（适用于歌词或需严格对齐的场景）。 | False |
+| `--concurrency` | API 请求的最大并发数量。数值越高速度越快，但需注意 API 速率限制 (Rate Limit)。 | 8 |
+| `--chunk-size` | 每次 API 请求包含的字幕行数。 | 10 |
+| `--merge-gap` | 智能合并时允许的最大时间间隔（秒）。超过此间隔的字幕行即使语法不完整也不会合并。 | 1.5 |
+| `--model` | 用于翻译的主 LLM 模型名称。 | deepseek-chat |
+| `--summary-model` | 用于生成全局剧情摘要的 LLM 模型名称。 | deepseek-reasoner |
+| `--max-chars` | 合并后的单条字幕最大字符数限制。 | 300 |
+| `--api-key` | API 密钥（可选）。通常建议通过 `.env` 文件配置，也可通过此参数临时指定。 | None |
+| `--base-url` | API 接口的基础地址。 | https://api.deepseek.com |
