@@ -1,8 +1,4 @@
-# -*- coding: utf-8 -*-
-import os
-
-# README 的内容
-readme_content = r"""# Async LLM Subtitle Translator Pro
+# AI Subtitle Translator
 
 这是一个基于大语言模型（LLM）的高性能字幕翻译工具。它不仅仅是简单地逐行翻译，还结合了**上下文感知**、**术语表管理**以及基于 **spaCy** 的智能断句合并功能，旨在提供更加流畅、准确的字幕翻译体验。
 
@@ -137,18 +133,3 @@ python translate_srt.py input.srt --model gpt-4o --concurrency 5 --base-url [htt
 ## License
 
 MIT License
-"""
-
-def create_readme():
-    file_path = "README.md"
-    try:
-        # 使用 utf-8 编码写入文件
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(readme_content.strip())
-        print(f"✅ 成功生成文件: {os.path.abspath(file_path)}")
-        print("现在你可以将此文件上传到 GitHub，它会自动显示格式。")
-    except Exception as e:
-        print(f"❌ 生成失败: {e}")
-
-if __name__ == "__main__":
-    create_readme()
