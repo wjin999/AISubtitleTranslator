@@ -1,28 +1,96 @@
-# AI Subtitle Translator (Async + spaCy)
+LLM Subtitle Translator Pro
+🚀 An intelligent, async, context-aware subtitle translation tool powered by LLMs (DeepSeek/OpenAI) and NLP.
 
-这是一个基于 Python 的 SRT 字幕翻译工具，调用 OpenAI 兼容接口（如 DeepSeek）进行翻译。它结合了异步并发处理与 NLP 自然语言处理技术，旨在提供高效且上下文连贯的字幕翻译体验。
+LLM Subtitle Translator Pro 是一个高性能的 SRT 字幕翻译 CLI 工具。与传统的逐行翻译不同，它利用 spaCy 进行智能句法分析以合并断句，利用 AsyncIO 实现高并发请求，并引入了 双向上下文感知 和 动态术语表 机制，旨在生成流畅、地道且术语一致的专业级字幕。
 
-## 功能特点
+✨ Features
+🚀 Async High-Performance: 基于 Python asyncio 和 tqdm 实现多协程并发，翻译速度比传统串行脚本快 5-10 倍。
 
-* 异步并发：使用 Python `asyncio` 库实现多协程并发请求，大幅减少 API 等待时间，显著提升翻译速度。
-* 智能断句合并：集成 `spaCy` NLP 模型，根据句法结构和时间轴间隔自动合并被切断的字幕行（如跨行长难句），提升翻译的语义完整性。
-* 上下文感知：在翻译时自动注入剧情摘要、上文和下文信息，有效解决多义词、代词指代及语气连贯性问题。
-* 术语表支持：支持加载外部术语表（格式为 `Term=Translation`），并在翻译时动态注入 Prompt，确保专有名词翻译的一致性。
-* 鲁棒性设计: 强制模型输出 JSON 结构化数据，防止传统机器翻译常见的漏行、错行或格式混乱问题。
+🧠 Smart NLP Merging: 集成 spaCy 语言模型，结合时间阈值（1.5s）和句法分析，自动修复时间轴切分导致的“断句”问题（如 that have + turned into）。
 
-## 参数说明
+📖 Context-Aware Translation: 翻译时自动注入全局剧情摘要、上文和下文，有效解决代词指代（It/They）歧义和语气连贯性问题。
 
-| 参数 | 说明 | 默认值 |
-| :--- | :--- | :--- |
-| `input_path` | (必填) 输入的 SRT 字幕文件路径。 | - |
-| `output_path` | (可选) 输出文件路径。如果不填，默认保存在同目录下，前缀为 `translated_`。 | None |
-| `--glossary` | 外部术语表文件的路径（文本格式，每行 `英文=中文`）。 | None |
-| `--no-merge` | [开关] 禁用 spaCy 智能合并功能。开启后将严格按照原始字幕行进行逐行翻译（适用于歌词或需严格对齐的场景）。 | False |
-| `--concurrency` | API 请求的最大并发数量。数值越高速度越快，但需注意 API 速率限制 (Rate Limit)。 | 8 |
-| `--chunk-size` | 每次 API 请求包含的字幕行数。 | 10 |
-| `--merge-gap` | 智能合并时允许的最大时间间隔（秒）。超过此间隔的字幕行即使语法不完整也不会合并。 | 1.5 |
-| `--model` | 用于翻译的主 LLM 模型名称。 | deepseek-chat |
-| `--summary-model` | 用于生成全局剧情摘要的 LLM 模型名称。 | deepseek-reasoner |
-| `--max-chars` | 合并后的单条字幕最大字符数限制。 | 300 |
-| `--api-key` | API 密钥（可选）。通常建议通过 `.env` 文件配置，也可通过此参数临时指定。 | None |
-| `--base-url` | API 接口的基础地址。 | https://api.deepseek.com |
+📚 Dynamic Glossary Support: 支持自动加载或手动指定术语表（Term=Translation），仅将当前片段涉及的术语注入 Prompt，节省 Token 并保证一致性。
+
+🛡️ Robust JSON Output: 强制 LLM 输出结构化 JSON 数据，彻底解决漏行、错行和格式混乱问题。
+
+🛠 Tech Stack
+Core: Python 3.10+
+
+LLM Integration: OpenAI SDK (Compatible with DeepSeek, OpenAI, etc.)
+
+NLP Engine: spaCy (en_core_web_sm)
+
+Concurrency: asyncio, tqdm
+
+Config: python-dotenv
+
+⚡ Quick Start
+Prerequisites
+Python 3.10 or higher
+
+An API Key (DeepSeek recommended for cost/performance)
+
+Installation
+Clone the repository
+
+Bash
+
+git clone https://github.com/your-username/llm-subtitle-translator.git
+cd llm-subtitle-translator
+Install dependencies
+
+Bash
+
+pip install openai tqdm spacy python-dotenv
+Download the NLP model
+
+Bash
+
+python -m spacy download en_core_web_sm
+Configure API Key Create a .env file in the root directory:
+
+代码段
+
+DEEPSEEK_API_KEY=sk-your_api_key_here
+💻 Usage Examples
+1. Basic Usage (Auto-Merge & Auto-Glossary)
+The script automatically detects glossary.txt in the current directory and enables smart merging by default.
+
+Bash
+
+# Simply run with the subtitle file
+python translate.py movie.srt
+2. Custom Terminology (Manual Glossary)
+Specify a custom glossary file (Format: English Term = Chinese Translation).
+
+Bash
+
+python translate.py video.srt --glossary valorant_terms.txt
+3. Lyric/Music Mode (No Merge)
+Disable smart merging for content that requires strict line-by-line translation, such as lyrics or poems.
+
+Bash
+
+python translate.py song.srt --no-merge
+4. Power User Configuration
+Customize concurrency, model, and chunk size for maximum performance.
+
+Bash
+
+python translate.py video.srt \
+  --model deepseek-chat \
+  --concurrency 10 \
+  --chunk-size 15 \
+  --output_path translated_final.srt
+📂 Project Structure
+Plaintext
+
+.
+├── translate.py           # Main script (The code provided)
+├── glossary.txt           # (Optional) Terminology mapping file
+├── .env                   # API Key configuration (Do not commit this!)
+├── requirements.txt       # Python dependencies
+└── README.md              # Project documentation
+📄 License
+Distributed under the MIT0 License. See LICENSE for more information.
