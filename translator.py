@@ -320,11 +320,24 @@ async def main_async_flow(args):
     original_content = in_path.read_text(encoding="utf-8-sig")
     entries = parse_srt(original_content)
     
-    # --- 1. 加载术语表 ---
+    # --- 1. 加载术语表 (智能自动检测版) ---
     glossary = {}
+    
+    # 逻辑优先级：
+    # 1. 如果用户命令行指定了 --glossary，就用指定的。
+    # 2. 如果没指定，但当前目录下有 "glossary.txt"，就自动加载。
+    
     if args.glossary_path:
+        # 情况1: 用户指定了文件
         g_path = Path(args.glossary_path).expanduser().resolve()
         glossary = load_glossary(g_path)
+    elif Path("glossary.txt").exists():
+        # 情况2: 用户没指定，但程序发现目录下有默认文件
+        logging.info("Auto-detected 'glossary.txt' in current directory. Loading...")
+        glossary = load_glossary(Path("glossary.txt"))
+    else:
+        # 情况3: 既没指定，也没找到默认文件
+        logging.info("No glossary loaded (glossary.txt not found).")
     
     # --- 2. 决定是否合并 ---
     if args.no_merge:
