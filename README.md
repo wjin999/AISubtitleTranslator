@@ -1,8 +1,8 @@
-# LLM Subtitle Translator Pro
+# AI Subtitle Translator
 
 > 🚀 **一款基于大语言模型（LLM）与 NLP 技术的智能字幕翻译工具。**
 
-**LLM Subtitle Translator Pro** 是一个高性能的 SRT 字幕翻译 CLI 工具。它结合了 **Python AsyncIO** 的高并发能力与 **spaCy** 的自然语言处理能力，旨在解决传统机器翻译中的“断句错误”和“代词歧义”问题。通过双向上下文感知和动态术语表注入，它能生成流畅、地道且术语一致的专业级中文字幕。
+**AI Subtitle Translator** 是一个高性能的 SRT 字幕翻译 CLI 工具。它结合了 **Python AsyncIO** 的高并发能力与 **spaCy** 的自然语言处理能力，旨在解决传统机器翻译中的“断句错误”和“代词歧义”问题。通过双向上下文感知和动态术语表注入，它能生成流畅、地道且术语一致的专业级中文字幕。
 
 ## ✨ Features (核心特性)
 
