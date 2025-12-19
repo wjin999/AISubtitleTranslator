@@ -1,108 +1,241 @@
-# AI Subtitle Translator
+# SRT Translator 🎬
 
-这是一个基于大语言模型（LLM）的高性能字幕翻译工具。它不仅仅是简单地逐行翻译，还结合了**上下文感知**、**术语表管理**以及基于 **spaCy** 的智能断句合并功能，旨在提供更加流畅、准确的字幕翻译体验。
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-默认配置针对 **DeepSeek** API 进行了优化，但也支持任何兼容 OpenAI 格式的 API。
+An async LLM-powered subtitle translator with intelligent merging capabilities. Translate your SRT subtitle files to Chinese with context-aware translations and consistent terminology.
 
-## ✨ 主要功能
+## ✨ Features
 
-* **🚀 异步高并发**: 使用 Python `asyncio` 和 `Semaphore` 实现多线程并发翻译，大幅提高处理速度。
+- **🧠 Intelligent Merging**: Uses spaCy NLP to smartly merge fragmented subtitles while preserving sentence boundaries
+- **📖 Context-Aware Translation**: Generates a content summary and provides surrounding context to the LLM for more accurate translations
+- **📚 Glossary Support**: Maintain consistent translations with custom terminology glossaries
+- **⚡ Async Processing**: High-performance concurrent API calls with configurable rate limiting
+- **🎯 Dynamic Term Matching**: Only injects relevant glossary terms into each translation chunk
 
-* **🧠 上下文感知 (Context-Aware)**:
+## 📦 Installation
 
-  * **全局摘要**: 在翻译前，首先使用推理模型（如 `deepseek-reasoner`）阅读全文并生成背景摘要，帮助翻译模型理解剧情语气。
-
-  * **滑动窗口**: 翻译每一块字幕时，会自动带入前文和后文作为参考，避免“语境缺失”。
-
-* **🔗 智能合并 (Smart Merging)**: 利用 `spaCy` NLP 模型分析句子结构，将短小、破碎的时间轴合并为完整的句子后再翻译，减少翻译碎片化，提升阅读体验。
-
-* **📚 术语表支持 (Glossary)**: 支持加载自定义术语表，确保人名、地名、专有名词翻译的一致性。支持自动检测目录下的 `glossary.txt`。
-
-* **🛠️ 鲁棒性设计**: 内置 API 速率限制处理和自动重试机制。
-
-## 📦 安装与依赖
-
-确保你的 Python 版本 >= 3.8。
-
-1. **克隆或下载代码**
-
-2. **安装依赖库**
-
-   ```bash
-   pip install openai tqdm python-dotenv spacy
-   ```
-
-3. **下载 spaCy 语言模型** (用于智能合并功能)
-
-   ```bash
-   python -m spacy download en_core_web_sm
-   ```
-
-## ⚙️ 配置与使用
-
-### 1. 设置 API Key
-
-在脚本同级目录下创建一个 `.env` 文件，填入你的 API Key：
-
-```env
-DEEPSEEK_API_KEY=sk-your-api-key-here
-```
-
-或者在运行时通过命令行参数传入。
-
-### 2. 准备术语表 (可选)
-
-你可以创建一个 `glossary.txt` 文件，格式为 `原文 = 译文`：
-
-```text
-John Doe = 强子
-New York = 纽约
-Cyberpunk = 赛博朋克
-```
-
-*脚本会自动检测当前目录下的 `glossary.txt`，或者通过 `--glossary` 指定路径。*
-
-### 3. 运行命令
-
-#### 基本用法
+### From PyPI (recommended)
 
 ```bash
-python translate_srt.py input.srt
+pip install srt-translator
 ```
 
-这将生成 `translated_input.srt`。
-
-#### 常用参数示例
+### From Source
 
 ```bash
-# 指定输出路径和术语表
-python translate_srt.py input.srt output.srt --glossary my_terms.txt
-
-# 禁用智能合并 (逐行翻译模式)
-python translate_srt.py input.srt --no-merge
-
-# 使用其他模型 (例如 GPT-4o) 并调整并发数
-python translate_srt.py input.srt --model gpt-4o --concurrency 5 --base-url [https://api.openai.com/v1](https://api.openai.com/v1)
+git clone https://github.com/yourusername/srt-translator.git
+cd srt-translator
+pip install -e .
 ```
 
-## 📋 参数说明
+### With Smart Merging (spaCy)
 
-| **参数** | **简写** | **说明** | **默认值** |
-| :--- | :--- | :--- | :--- |
-| `input_path` | - | **(必填)** 输入的 SRT 字幕文件路径 | - |
-| `output_path` | - | 输出文件路径 | `translated_[文件名]` |
-| `--glossary` | - | 术语表文件路径 | 自动检测 `glossary.txt` |
-| `--no-merge` | - | 禁用 spaCy 智能合并功能 | False (默认启用) |
-| `--api-key` | - | API 密钥 (优先于环境变量) | - |
-| `--base-url` | - | API 基础地址 | `https://api.deepseek.com` |
-| `--model` | - | 用于翻译的聊天模型 | `deepseek-chat` |
-| `--summary-model` | - | 用于生成摘要的推理/更强模型 | `deepseek-reasoner` |
-| `--concurrency` | - | 并发请求数量 | 8 |
-| `--chunk-size` | - | 每次请求翻译的字幕行数 | 10 |
-| `--max-chars` | - | 合并时允许的最大字符数 | 300 |
-| `--merge-gap` | - | 合并时允许的最大时间间隔(秒) | 1.5 |
+```bash
+pip install srt-translator[merge]
+python -m spacy download en_core_web_sm
+```
 
+### Development Installation
 
-## License
+```bash
+pip install -e ".[all]"
+```
 
-MIT License
+## 🚀 Quick Start
+
+### 1. Set up your API key
+
+```bash
+# Option 1: Environment variable
+export DEEPSEEK_API_KEY="your_api_key_here"
+
+# Option 2: Create .env file
+cp .env.example .env
+# Edit .env with your API key
+```
+
+### 2. Translate a subtitle file
+
+```bash
+# Basic usage
+srt-translator video.srt
+
+# Specify output file
+srt-translator video.srt -o translated.srt
+
+# With custom glossary
+srt-translator video.srt --glossary my_terms.txt
+
+# Disable smart merging
+srt-translator video.srt --no-merge
+```
+
+## 📖 Usage
+
+### Command Line Interface
+
+```
+usage: srt-translator [-h] [--glossary GLOSSARY_PATH] [--no-merge]
+                      [--max-chars MAX_CHARS] [--merge-gap MERGE_GAP]
+                      [--api-key API_KEY] [--base-url BASE_URL]
+                      [--model MODEL] [--summary-model SUMMARY_MODEL]
+                      [--concurrency CONCURRENCY] [--chunk-size CHUNK_SIZE]
+                      [--verbose]
+                      input_path [output_path]
+
+Async LLM Subtitle Translator with Smart Merging
+
+positional arguments:
+  input_path            Path to input SRT file
+  output_path           Path to output SRT file (default: translated_<input>)
+
+options:
+  -h, --help            show this help message and exit
+  --glossary, -g        Path to glossary file (format: Term=Translation)
+  --no-merge            Disable smart merging (translate line-by-line)
+  --max-chars           Maximum characters per merged entry (default: 300)
+  --merge-gap           Maximum time gap (seconds) for merging (default: 1.5)
+  --api-key             API key (default: DEEPSEEK_API_KEY env var)
+  --base-url            API base URL (default: https://api.deepseek.com)
+  --model               Translation model (default: deepseek-chat)
+  --summary-model       Summary model (default: deepseek-reasoner)
+  --concurrency         Max concurrent API requests (default: 8)
+  --chunk-size          Lines per translation chunk (default: 10)
+  --verbose, -v         Enable verbose logging
+```
+
+### Python API
+
+```python
+import asyncio
+from srt_translator import (
+    parse_srt, 
+    save_srt, 
+    merge_entries, 
+    init_spacy_model,
+    load_glossary
+)
+
+# Parse SRT file
+with open("video.srt", encoding="utf-8") as f:
+    entries = parse_srt(f.read())
+
+# Optional: Initialize spaCy and merge entries
+init_spacy_model()
+merged = merge_entries(entries, max_chars=300, time_gap_threshold=1.5)
+
+# Load glossary
+glossary = load_glossary("glossary.txt")
+
+# ... perform translation ...
+
+# Save result
+save_srt(translated_entries, "output.srt")
+```
+
+## 📚 Glossary Format
+
+Create a text file with one term per line in `Term = Translation` format:
+
+```
+# Character Names
+John = 约翰
+Dr. Smith = 史密斯博士
+
+# Technical Terms
+artificial intelligence = 人工智能
+machine learning = 机器学习
+
+# Common Phrases
+thank you = 谢谢
+```
+
+The translator automatically detects if a `glossary.txt` file exists in the current directory.
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEEPSEEK_API_KEY` | API key for DeepSeek | (required) |
+
+### Default Settings
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| `concurrency` | 8 | Max concurrent API requests |
+| `chunk_size` | 10 | Lines per translation batch |
+| `max_chars` | 300 | Max characters per merged entry |
+| `merge_gap` | 1.5s | Max time gap for merging |
+
+## 📁 Project Structure
+
+```
+srt-translator/
+├── src/
+│   └── srt_translator/
+│       ├── __init__.py      # Package exports
+│       ├── __main__.py      # python -m entry point
+│       ├── cli.py           # Command-line interface
+│       ├── config.py        # Configuration management
+│       ├── models.py        # Data models (SrtEntry)
+│       ├── parser.py        # SRT parsing/saving
+│       ├── merger.py        # spaCy-based merging
+│       ├── glossary.py      # Glossary loading
+│       ├── translator.py    # LLM translation logic
+│       ├── llm_client.py    # API client utilities
+│       └── text_utils.py    # Text processing
+├── tests/
+│   ├── test_models.py
+│   ├── test_parser.py
+│   └── test_glossary.py
+├── pyproject.toml
+├── README.md
+├── LICENSE
+├── .env.example
+├── .gitignore
+└── glossary.example.txt
+```
+
+## 🧪 Development
+
+### Run Tests
+
+```bash
+pytest
+```
+
+### Code Formatting
+
+```bash
+black src/ tests/
+isort src/ tests/
+```
+
+### Type Checking
+
+```bash
+mypy src/
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [DeepSeek](https://www.deepseek.com/) for the LLM API
+- [spaCy](https://spacy.io/) for NLP capabilities
+- [OpenAI Python Client](https://github.com/openai/openai-python) for API interaction
