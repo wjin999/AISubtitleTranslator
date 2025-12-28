@@ -1,7 +1,5 @@
 # AI Subtitle Translator
 
-基于 LLM 的英文字幕翻译工具，支持智能合并和断点续传。
-
 ## 安装
 
 ```bash
@@ -58,7 +56,3 @@ machine learning = 机器学习
 | `--model` | 翻译模型 | deepseek-chat |
 | `--concurrency` | 并发数 | 8 |
 | `-v` | 详细日志 | - |
-
-## License
-
-MIT
