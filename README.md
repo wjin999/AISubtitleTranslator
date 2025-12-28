@@ -1,4 +1,4 @@
-# SRT Translator
+# AI Subtitle Translator
 
 基于 LLM 的英文字幕翻译工具，支持智能合并和断点续传。
 
