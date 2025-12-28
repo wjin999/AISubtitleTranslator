@@ -1,0 +1,24 @@
+# Glossary File Example / 术语表示例
+# Format: English Term = Chinese Translation
+# Lines starting with # are comments
+
+# Character Names / 人物名称
+John = 约翰
+Mary = 玛丽
+Dr. Smith = 史密斯博士
+
+# Technical Terms / 专业术语
+artificial intelligence = 人工智能
+machine learning = 机器学习
+neural network = 神经网络
+deep learning = 深度学习
+
+# Common Phrases / 常用短语
+thank you = 谢谢
+goodbye = 再见
+excuse me = 不好意思
+
+# Slang / 俚语 (use authentic Chinese internet slang)
+awesome = 绝绝子
+cool = 牛逼
+amazing = 太牛了
