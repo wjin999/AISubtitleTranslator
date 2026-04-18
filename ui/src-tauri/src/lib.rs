@@ -1,0 +1,20 @@
+use tauri_plugin_shell::ShellExt;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            // 在软件启动时，静默唤起后台 Python 内核
+            let sidecar_command = app.shell().sidecar("api-server").expect("Failed to create sidecar command");
+            
+            // 异步执行，不阻塞 UI 界面显示
+            tauri::async_runtime::spawn(async move {
+                let (_rx, _child) = sidecar_command.spawn().expect("Failed to start backend");
+            });
+
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

@@ -1,0 +1,209 @@
+/* TI8 SUBTERRANEAN HARDCORE STYLE */
+
+:root {
+  --ti8-green: #1eb589;
+  --ti8-dark: #0a0e0c;
+  --ti8-glow: rgba(30, 181, 137, 0.4);
+  --ti8-gold: #d4af37;
+  --ti8-red: #ff4d4d;
+  --font-code: 'Consolas', 'Courier New', monospace;
+}
+
+/* 1. 隐藏所有滚动条，但保留滚动功能 */
+::-webkit-scrollbar { width: 0px; background: transparent; }
+* { scrollbar-width: none; }
+
+body {
+  margin: 0;
+  background-color: var(--ti8-dark); 
+  display: block; 
+  min-height: 100vh;
+  font-family: var(--font-code);
+  color: var(--ti8-green);
+}
+
+.ti8-container { 
+  width: 100%; 
+  padding: 0; 
+  box-sizing: border-box;
+}
+
+.terminal-card {
+  background: var(--ti8-dark);
+  border: 1px solid var(--ti8-green); 
+  box-shadow: inset 0 0 10px var(--ti8-glow); 
+  padding: 0;
+  min-height: 100vh; 
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  background: rgba(30, 181, 137, 0.1);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ti8-green);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-toggle {
+  background: linear-gradient(to bottom, #111, #000);
+  border: 1px solid var(--ti8-gold);
+  color: var(--ti8-gold);
+  font-family: inherit;
+  font-size: 13px; /* 放大 */
+  cursor: pointer;
+  padding: 8px 14px;
+  box-shadow: 0 2px 0 rgba(212, 175, 55, 0.3);
+}
+
+.settings-toggle:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+
+.view-content { 
+  padding: 24px; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 16px; 
+  flex: 1; 
+}
+
+.scrollable { overflow-y: auto; }
+
+.ti8-upload { border: none; margin-bottom: 5px; }
+#ti-up { display: none; }
+.ti8-btn-upload {
+  display: block;
+  background: linear-gradient(to bottom, #111, #050505);
+  border: 1px dashed var(--ti8-green);
+  color: var(--ti8-green);
+  padding: 30px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 16px; /* 放大 */
+  box-shadow: 0 2px 0 rgba(30, 181, 137, 0.2);
+}
+.ti8-btn-upload:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+
+.ti8-execute {
+  background: #111; border: 2px solid #333; color: #444;
+  padding: 18px; font-family: inherit; font-weight: bold;
+  font-size: 16px; /* 放大 */
+  text-transform: uppercase; cursor: not-allowed;
+  box-shadow: 0 4px 0 #000;
+}
+
+.ti8-execute.ready {
+  background: linear-gradient(to bottom, var(--ti8-green), #148f6a);
+  color: #000; border-color: #000; cursor: pointer;
+  box-shadow: 0 4px 0 #0d5f46, 0 4px 20px var(--ti8-glow);
+}
+
+.ti8-execute.ready:active { transform: translateY(4px); box-shadow: 0 0 0 transparent; }
+
+/* 新增：进度条样式 */
+.progress-container {
+  width: 100%;
+  height: 6px;
+  background-color: #000;
+  border: 1px solid #333;
+  border-radius: 2px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: var(--ti8-green);
+  box-shadow: 0 0 10px var(--ti8-glow);
+  transition: width 0.4s ease;
+}
+
+.ti8-status {
+  font-size: 14px; /* 放大 */
+  min-height: 45px; border-top: 1px solid #1a1a1a;
+  padding-top: 15px; color: #666; line-height: 1.5;
+}
+
+.field-group { display: flex; flex-direction: column; gap: 6px; }
+.field-group label { font-size: 12px; /* 放大 */ color: var(--ti8-gold); letter-spacing: 1px; }
+.field-group input {
+  background: #000; border: 1px solid #222; color: var(--ti8-green);
+  padding: 12px; font-size: 14px; /* 放大 */ font-family: inherit; outline: none;
+}
+.field-group input:focus { border-color: var(--ti8-green); }
+
+.ti8-prompt-btn {
+  background: #000; border: 1px solid var(--ti8-green);
+  color: var(--ti8-green); font-family: inherit; font-size: 13px; /* 放大 */
+  cursor: pointer; padding: 8px; box-shadow: 0 2px 0 rgba(30, 181, 137, 0.2);
+}
+.ti8-prompt-btn:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+
+.ti8-reset-btn {
+  margin-top: 20px; background: transparent;
+  border: 1px solid var(--ti8-red); color: var(--ti8-red);
+  font-family: inherit; font-size: 13px; /* 放大 */
+  padding: 12px; cursor: pointer; opacity: 0.6; transition: opacity 0.2s;
+}
+.ti8-reset-btn:hover { opacity: 1; background: rgba(255, 77, 77, 0.1); }
+
+.ti8-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.9); z-index: 100; display: flex;
+  justify-content: center; align-items: center;
+}
+.ti8-modal {
+  width: 90%; max-width: 500px; background: var(--ti8-dark);
+  border: 1px solid var(--ti8-green); padding: 20px;
+  box-shadow: 0 0 50px var(--ti8-glow);
+}
+.modal-top { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px; }
+.modal-top button {
+  background: var(--ti8-green); border: none; color: #000;
+  padding: 8px 16px; font-weight: bold; cursor: pointer;
+}
+
+textarea {
+  width: 100%; height: 320px; background: #000; color: var(--ti8-green);
+  border: 1px solid #222; padding: 12px; font-family: var(--font-code);
+  font-size: 14px; resize: none; box-sizing: border-box; line-height: 1.5;
+}
+
+.ti8-divider { border-bottom: 1px dashed #1a1a1a; margin: 5px 0; }
+
+/* 新增：错误状态的样式，覆盖默认的绿色 */
+.ti8-status.is-error {
+  color: var(--ti8-red);
+  font-weight: bold;
+  border-top-color: var(--ti8-red);
+  text-shadow: 0 0 8px rgba(255, 77, 77, 0.4);
+  white-space: pre-wrap; /* 允许报错信息正常换行 */
+}
+
+.terminal-logs-container {
+  background: #030504;
+  border: 1px solid #1a241f;
+  border-radius: 2px;
+  padding: 12px;
+  height: 140px; /* 固定高度，超出滚动 */
+  overflow-y: auto;
+  font-size: 12px;
+  margin-top: 5px;
+  box-shadow: inset 0 0 15px rgba(0,0,0,0.9);
+  text-align: left;
+  line-height: 1.6;
+}
+
+.log-line {
+  margin-bottom: 4px;
+  color: #5c8577; /* 稍暗的墨绿色，符合硬核终端风格 */
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.log-line.error {
+  color: var(--ti8-red);
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(255, 77, 77, 0.4);
+}
