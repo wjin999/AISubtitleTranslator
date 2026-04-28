@@ -7,22 +7,15 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import List
 
-from tqdm.asyncio import tqdm_asyncio
+from tqdm import tqdm
 
 from .config import TranslatorConfig, DEFAULT_GLOSSARY_FILENAME
 from .models import SrtEntry
 from .parser import parse_srt, save_srt, validate_srt_file
 from .merger import init_spacy_model, merge_entries_batch
 from .glossary import load_glossary, Glossary
-from .translator import (
-    translate_chunk_task, 
-    generate_context_summary,
-    TranslationResult,
-    extract_translations,
-)
-from .text_utils import clean_translated_text
 from .llm_client import create_client
 from .progress import (
     TranslationProgress,
@@ -31,6 +24,7 @@ from .progress import (
     load_progress,
     delete_progress,
 )
+from .pipeline import TranslationPipeline
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -73,8 +67,8 @@ Examples:
     # API options
     parser.add_argument("--api-key", help="API key (or set DEEPSEEK_API_KEY)")
     parser.add_argument("--base-url", default="https://api.deepseek.com")
-    parser.add_argument("--model", dest="model_name", default="deepseek-chat")
-    parser.add_argument("--summary-model", dest="summary_model_name", default="deepseek-reasoner")
+    parser.add_argument("--model", dest="model_name", default="deepseek-v4-flash")
+    parser.add_argument("--summary-model", dest="summary_model_name", default="deepseek-v4-pro")
     
     # Performance
     parser.add_argument("--concurrency", type=int, default=8, help="Max concurrent requests")
@@ -88,105 +82,6 @@ Examples:
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     
     return parser.parse_args()
-
-
-async def run_translation(
-    client,
-    chunks: List[List[str]],
-    all_texts: List[str],
-    summary: str,
-    glossary: Glossary,
-    config: TranslatorConfig,
-    progress: TranslationProgress | None,
-    progress_path: Path | None,
-) -> Dict[int, str]:
-    """
-    Execute translation with progress tracking.
-    
-    Returns:
-        Dict mapping global index to translated text
-    """
-    logger = logging.getLogger(__name__)
-    sem = asyncio.Semaphore(config.concurrency)
-    chunk_size = config.chunk_size
-    ctx_window = config.context_window
-    
-    # 确定需要翻译的 chunks
-    if progress:
-        pending = progress.get_pending_chunks()
-        logger.info(f"Resuming: {len(progress.completed_chunks)}/{progress.total_chunks} chunks done")
-    else:
-        pending = list(range(len(chunks)))
-    
-    results_dict: Dict[int, str] = {}
-    
-    # 从进度恢复已完成的翻译
-    if progress:
-        results_dict.update(progress.translations)
-    
-    # 创建待翻译任务
-    tasks = []
-    task_chunk_indices = []
-    
-    for chunk_idx in pending:
-        chunk = chunks[chunk_idx]
-        start_idx = chunk_idx * chunk_size
-        end_idx = start_idx + len(chunk)
-        
-        # 上下文窗口
-        prev_start = max(0, start_idx - ctx_window)
-        context_prev = all_texts[prev_start:start_idx]
-        next_end = min(len(all_texts), end_idx + ctx_window)
-        context_next = all_texts[end_idx:next_end]
-        
-        chunk_data = [
-            {"index": start_idx + j, "text": text}
-            for j, text in enumerate(chunk)
-        ]
-        
-        task = translate_chunk_task(
-            client=client,
-            chunk_data=chunk_data,
-            context_prev=context_prev,
-            context_next=context_next,
-            global_summary=summary,
-            glossary=glossary,
-            model=config.model_name,
-            sem=sem,
-        )
-        tasks.append(task)
-        task_chunk_indices.append(chunk_idx)
-    
-    if not tasks:
-        logger.info("No chunks to translate")
-        return results_dict
-    
-    logger.info(f"Translating {len(tasks)} chunks...")
-    
-    # 执行翻译
-    results_list = await tqdm_asyncio.gather(*tasks, desc="Translating")
-    
-    # 处理结果
-    for chunk_idx, chunk_results in zip(task_chunk_indices, results_list):
-        chunk_translations = {}
-        
-        for r in chunk_results:
-            if r.success:
-                cleaned = clean_translated_text(r.translated)
-                results_dict[r.index] = cleaned
-                chunk_translations[r.index] = cleaned
-            else:
-                # 失败时保留原文
-                results_dict[r.index] = r.original
-                chunk_translations[r.index] = r.original
-                logger.warning(f"Translation failed for #{r.index}: {r.error}")
-        
-        # 更新进度
-        if progress and progress_path:
-            progress.mark_completed(chunk_idx, chunk_translations)
-            save_progress(progress, progress_path)
-    
-    return results_dict
 
 
 async def main_async(args: argparse.Namespace) -> int:
@@ -231,15 +126,13 @@ async def main_async(args: argparse.Namespace) -> int:
     if config.enable_merge:
         init_spacy_model()
         merged_entries = merge_entries_batch(
-            entries, 
-            config.max_chars_per_entry, 
+            entries,
+            config.max_chars_per_entry,
             config.merge_time_gap
         )
     else:
         logger.info("Merging disabled")
         merged_entries = [e.copy() for e in entries]
-    
-    all_texts = [e.text for e in merged_entries]
     
     # 进度管理
     progress_path = get_progress_file(in_path) if not args.no_progress else None
@@ -255,30 +148,31 @@ async def main_async(args: argparse.Namespace) -> int:
     # 创建 API 客户端
     client = create_client(config.api_key, config.base_url)
     
-    # 准备 chunks
-    chunk_size = config.chunk_size
-    chunks = [
-        all_texts[i:i + chunk_size] 
-        for i in range(0, len(all_texts), chunk_size)
-    ]
-    
     # 初始化进度
+    total_chunks = (len(merged_entries) + config.chunk_size - 1) // config.chunk_size
     if not progress:
-        progress = TranslationProgress.create(str(in_path), len(chunks))
+        progress = TranslationProgress.create(str(in_path), total_chunks)
     
-    # 生成摘要（可以和第一批翻译并行，但这里简化处理）
-    summary = ""
-    if not progress.completed_chunks:
-        full_text = "\n".join(all_texts)
-        summary = await generate_context_summary(
-            full_text, client, config.summary_model_name
-        )
+    # 创建 tqdm 进度条
+    pbar = tqdm(total=total_chunks, desc="Translating", unit="chunk")
     
-    # 执行翻译
-    translations = await run_translation(
-        client, chunks, all_texts, summary, glossary,
-        config, progress, progress_path
+    # 进度回调：更新 tqdm 进度条 + 保存到磁盘
+    def _update_progress(chunk_idx: int, pct: int):
+        pbar.update(1)
+        if progress_path:
+            save_progress(progress, progress_path)
+    
+    # 创建管道并执行翻译
+    pipeline = TranslationPipeline(config)
+    translations = await pipeline.run(
+        entries=merged_entries,
+        glossary=glossary,
+        client=client,
+        progress=progress,
+        on_progress=_update_progress,
     )
+    
+    pbar.close()
     
     # 构建输出
     final_entries: List[SrtEntry] = []

@@ -2,21 +2,21 @@ import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 const DEF_SUM_PROMPT = `You are a professional content analyst. Read the text and generate a concise background summary including: main topics, key terms, character relationships, and overall tone. Output in Chinese, within 150 words.`;
-const DEF_TRANS_PROMPT = `You are a professional subtitle translator. Translate English to Simplified Chinese.
+const DEF_TRANS_PROMPT = `You are a professional subtitle translator specializing in video subtitles. Translate the given English subtitles into Simplified Chinese.
 
-## Rules:
-1. Output valid JSON: {"translations": [{"id": 0, "text": "翻译"}, ...]}
-2. Keep the same number of items as input
-3. Keep translations concise for subtitles
-4. Use natural Chinese expressions
-5. Follow glossary terms exactly if provided
-
-## JSON Format Example:
-{"translations": [{"id": 0, "text": "你好"}, {"id": 1, "text": "世界"}]}`;
+## Subtitle Translation Best Practices:
+1. Use natural, colloquial Chinese suitable for spoken dialogue
+2. Preserve speaker's tone and emotion (anger, whisper, sarcasm, excitement, etc.)
+3. Maintain character voice consistency across all subtitles
+4. For idioms, puns, or cultural references: adapt naturally rather than literal translate
+5. Use Chinese punctuation （，。！？——……）not English punctuation
+6. When multiple speakers, distinguish clearly in translation
+7. Keep related sentences flowing naturally across consecutive subtitle entries
+8. Follow glossary terms exactly if provided; use them consistently`;
 
 const DEF_URL = "https://api.deepseek.com";
-const DEF_SUM_MODEL = "deepseek-reasoner";
-const DEF_TRANS_MODEL = "deepseek-chat";
+const DEF_SUM_MODEL = "deepseek-v4-pro";
+const DEF_TRANS_MODEL = "deepseek-v4-flash";
 
 type LogEntry = { text: string; isError: boolean };
 type ModalType = "sum" | "trans" | "glossary" | null;

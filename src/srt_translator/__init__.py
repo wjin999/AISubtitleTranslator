@@ -20,6 +20,7 @@ from .glossary import load_glossary, Glossary, find_matching_terms
 from .text_utils import clean_translated_text, validate_translation
 from .config import TranslatorConfig
 from .progress import TranslationProgress, save_progress, load_progress
+from .pipeline import TranslationPipeline
 
 __all__ = [
     # Models
@@ -39,6 +40,8 @@ __all__ = [
     # Translation
     "translate_chunk_task",
     "generate_context_summary",
+    # Pipeline
+    "TranslationPipeline",
     # Glossary
     "load_glossary",
     "find_matching_terms",

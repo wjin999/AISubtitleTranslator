@@ -1,6 +1,5 @@
 import os
 import sys
-import asyncio
 import uuid
 import shutil
 from pathlib import Path
@@ -16,9 +15,7 @@ from srt_translator.parser import parse_srt, save_srt
 from srt_translator.merger import init_spacy_model, merge_entries_batch
 from srt_translator.glossary import Glossary
 from srt_translator.llm_client import create_client
-from srt_translator.translator import generate_context_summary, translate_chunk_task
-from srt_translator.progress import TranslationProgress
-from srt_translator.text_utils import clean_translated_text
+from srt_translator.pipeline import TranslationPipeline
 
 app = FastAPI(title="AISubtitleTranslator API", version="2.0")
 
@@ -84,68 +81,39 @@ async def process_translation_job(
         all_texts = [e.text for e in merged_entries]
         client = create_client(config.api_key, config.base_url)
         
-        chunk_size = config.chunk_size
-        chunks = [all_texts[i:i + chunk_size] for i in range(0, len(all_texts), chunk_size)]
-        
-        progress_path = WORK_DIR / f"{job_id}.progress.json"
-        progress = TranslationProgress.create(str(input_path), len(chunks))
+        # 构建 Glossary 对象（从 glossary.txt 文件读取）
+        glossary_obj = Glossary()
+        if os.path.exists("glossary.txt"):
+            from srt_translator.glossary import load_glossary
+            glossary_obj = load_glossary(Path("glossary.txt"))
         
         JOB_STATE[job_id]["progress_pct"] = 10
-        log_msg(job_id, "正在生成全文摘要...")
+        log_msg(job_id, "正在翻译中...")
         
-        summary = await generate_context_summary("\n".join(all_texts), client, config.summary_model_name)
+        # 进度回调：更新 JOB_STATE
+        def _normalize_progress(job_id: str):
+            """返回一个闭包，用于更新 JOB_STATE 进度。"""
+            def callback(chunk_idx: int, pct: int):
+                # pct: 0-100, 映射到 10-95 区间
+                mapped_pct = 10 + int(pct * 0.85)
+                JOB_STATE[job_id]["progress_pct"] = mapped_pct
+            return callback
         
-        JOB_STATE[job_id]["progress_pct"] = 15
-        log_msg(job_id, "摘要生成完毕，开始批量翻译...")
+        # 创建管道并执行翻译
+        pipeline = TranslationPipeline(config)
+        translations = await pipeline.run(
+            entries=merged_entries,
+            glossary=glossary_obj,
+            client=client,
+            on_progress=_normalize_progress(job_id),
+            summary_prompt=summary_prompt,
+            translation_prompt=translation_prompt,
+        )
         
-        sem = asyncio.Semaphore(config.concurrency)
-        results_dict = {}
-        
-        async def _do_chunk(chunk_idx):
-            chunk = chunks[chunk_idx]
-            start_idx = chunk_idx * config.chunk_size
-            end_idx = start_idx + len(chunk)
-            
-            prev_start = max(0, start_idx - config.context_window)
-            context_prev = all_texts[prev_start:start_idx]
-            next_end = min(len(all_texts), end_idx + config.context_window)
-            context_next = all_texts[end_idx:next_end]
-            
-            chunk_data = [{"index": start_idx + j, "text": text} for j, text in enumerate(chunk)]
-            
-            res = await translate_chunk_task(
-                client=client, chunk_data=chunk_data, context_prev=context_prev,
-                context_next=context_next, global_summary=summary, glossary=Glossary(),
-                model=config.model_name, sem=sem
-            )
-            return chunk_idx, res
-
-        tasks = [_do_chunk(i) for i in range(len(chunks))]
-        total_chunks = len(tasks)
-        completed_count = 0
-        
-        for coro in asyncio.as_completed(tasks):
-            chunk_idx, chunk_results = await coro
-            chunk_translations = {}
-            for r in chunk_results:
-                if r.success:
-                    cleaned = clean_translated_text(r.translated)
-                    results_dict[r.index] = cleaned
-                    chunk_translations[r.index] = cleaned
-                else:
-                    results_dict[r.index] = r.original
-                    chunk_translations[r.index] = r.original
-            
-            if progress:
-                progress.mark_completed(chunk_idx, chunk_translations)
-            
-            completed_count += 1
-            JOB_STATE[job_id]["progress_pct"] = 15 + int((completed_count / total_chunks) * 80)
-            
         JOB_STATE[job_id]["progress_pct"] = 95
         log_msg(job_id, "翻译结束，正在保存文件...")
         
-        final_entries = [entry.copy(text=results_dict.get(i, entry.text)) for i, entry in enumerate(merged_entries)]
+        final_entries = [entry.copy(text=translations.get(i, entry.text)) for i, entry in enumerate(merged_entries)]
         save_srt(final_entries, output_path)
         
         JOB_STATE[job_id]["progress_pct"] = 100
@@ -164,8 +132,8 @@ async def translate_endpoint(
     file: UploadFile = File(...),
     api_key: str = Form(""),
     base_url: str = Form("https://api.deepseek.com"),
-    summary_model_name: str = Form("deepseek-reasoner"),
-    model_name: str = Form("deepseek-chat"),
+    summary_model_name: str = Form("deepseek-v4-pro"),
+    model_name: str = Form("deepseek-v4-flash"),
     summary_prompt: str = Form(None),
     translation_prompt: str = Form(None),
     glossary: str = Form(""), # 新增：接收前端术语表

@@ -29,24 +29,34 @@ class TranslationResult:
 
 
 async def generate_context_summary(
-    full_text: str, 
-    client: AsyncOpenAI, 
-    model: str
+    full_text: str,
+    client: AsyncOpenAI,
+    model: str,
+    custom_prompt: str | None = None
 ) -> str:
     """
     Generate a context summary for the subtitle content.
+    
+    Args:
+        full_text: The full text to summarize
+        client: AsyncOpenAI client
+        model: Model name to use
+        custom_prompt: Optional custom system prompt to override the default
     """
     if not full_text.strip():
         return ""
     
     logger.info(f"Generating context summary using model: {model}...")
     
-    system_prompt = (
-        "You are a professional content analyst. "
-        "Read the text and generate a concise background summary including: "
-        "main topics, key terms, character relationships, and overall tone. "
-        "Output in Chinese, within 150 words."
-    )
+    if custom_prompt:
+        system_prompt = custom_prompt
+    else:
+        system_prompt = (
+            "You are a professional content analyst. "
+            "Read the text and generate a concise background summary including: "
+            "main topics, key terms, character relationships, and overall tone. "
+            "Output in Chinese, within 150 words."
+        )
     
     # 截断过长文本
     max_len = 6000
@@ -80,26 +90,39 @@ def _build_translation_prompt(
     context_prev: List[str],
     context_next: List[str],
     global_summary: str,
-    matched_terms: List[str]
+    matched_terms: List[str],
+    custom_prompt: str | None = None
 ) -> tuple[str, str]:
     """Build translation prompts."""
+
+    if custom_prompt:
+        system_prompt = custom_prompt
+    else:
+        system_prompt = """You are a professional subtitle translator specializing in video subtitles.
+Translate the given English subtitles into Simplified Chinese.
+
+## Core Requirements:
+1. Output valid JSON: {"translations": [{"id": 0, "text": "翻译"}, ...]}
+2. Keep the same number of items as input
+3. Each translation MUST be concise (Chinese ~3-5 characters per second of screen time)
+
+## Subtitle Translation Best Practices:
+4. Use natural, colloquial Chinese suitable for spoken dialogue
+5. Preserve speaker's tone and emotion (anger, whisper, sarcasm, excitement, etc.)
+6. Maintain character voice consistency across all subtitles
+7. For idioms, puns, or cultural references: adapt naturally rather than literal translate
+8. Use Chinese punctuation （，。！？——……）not English punctuation
+9. When multiple speakers, distinguish clearly in translation
+10. Keep related sentences flowing naturally across consecutive subtitle entries
+11. Follow glossary terms exactly if provided; use them consistently
+
+## JSON Format Example:
+{"translations": [{"id": 0, "text": "你好"}, {"id": 1, "text": "世界"}]}"""
     
     glossary_section = ""
     if matched_terms:
         glossary_list = "\n".join([f"  - {t}" for t in matched_terms])
         glossary_section = f"\n## Glossary (must use):\n{glossary_list}\n"
-    
-    system_prompt = """You are a professional subtitle translator. Translate English to Simplified Chinese.
-
-## Rules:
-1. Output valid JSON: {"translations": [{"id": 0, "text": "翻译"}, ...]}
-2. Keep the same number of items as input
-3. Keep translations concise for subtitles
-4. Use natural Chinese expressions
-5. Follow glossary terms exactly if provided
-
-## JSON Format Example:
-{"translations": [{"id": 0, "text": "你好"}, {"id": 1, "text": "世界"}]}"""
 
     prev_str = " | ".join(context_prev[-3:]) if context_prev else ""
     next_str = " | ".join(context_next[:3]) if context_next else ""
@@ -175,8 +198,9 @@ async def _translate_single_retry(
     terms = [f"{k} -> {v}" for k, v in matched.items()]
     
     system_prompt = (
-        "Translate English to Chinese. "
-        "Output only the translation, no explanation."
+        "Translate English subtitle to Simplified Chinese. "
+        "Output ONLY the Chinese translation, no quotes, no punctuation, no explanation. "
+        "Keep it concise for subtitle use."
     )
     
     glossary_hint = f" Terms: {', '.join(terms)}" if terms else ""
@@ -197,15 +221,16 @@ async def _translate_single_retry(
 
 
 async def translate_chunk_task(
-    client: AsyncOpenAI, 
-    chunk_data: List[Dict[str, Any]], 
+    client: AsyncOpenAI,
+    chunk_data: List[Dict[str, Any]],
     context_prev: List[str],
     context_next: List[str],
     global_summary: str,
     glossary: Glossary | Dict[str, str],
-    model: str, 
+    model: str,
     sem: asyncio.Semaphore,
-    retry_failed: bool = True
+    retry_failed: bool = True,
+    custom_translation_prompt: str | None = None,
 ) -> List[TranslationResult]:
     """
     Translate a chunk of subtitle entries.
@@ -225,7 +250,8 @@ async def translate_chunk_task(
         matched_terms = [f"{term} -> {trans}" for term, trans in matched.items()]
         
         system_prompt, user_prompt = _build_translation_prompt(
-            items, context_prev, context_next, global_summary, matched_terms
+            items, context_prev, context_next, global_summary, matched_terms,
+            custom_prompt=custom_translation_prompt,
         )
         
         json_str = await call_llm_async(

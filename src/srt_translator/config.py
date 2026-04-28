@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Optional
@@ -12,6 +13,8 @@ from dotenv import load_dotenv
 # Load environment variables once
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class TranslatorConfig:
@@ -20,8 +23,8 @@ class TranslatorConfig:
     # API settings
     api_key: Optional[str] = None
     base_url: str = "https://api.deepseek.com"
-    model_name: str = "deepseek-chat"
-    summary_model_name: str = "deepseek-reasoner"
+    model_name: str = "deepseek-v4-flash"
+    summary_model_name: str = "deepseek-v4-pro"
     
     # Processing settings
     concurrency: int = 8
@@ -40,6 +43,9 @@ class TranslatorConfig:
     save_progress: bool = True
     progress_file: Optional[Path] = None
     
+    # Deprecated model names that will be removed in future versions
+    DEPRECATED_MODELS = {"deepseek-chat", "deepseek-reasoner"}
+    
     def __post_init__(self):
         """Load API key from environment if not provided."""
         if self.api_key is None:
@@ -56,8 +62,8 @@ class TranslatorConfig:
         return cls(
             api_key=api_key,
             base_url=getattr(args, 'base_url', "https://api.deepseek.com"),
-            model_name=getattr(args, 'model_name', "deepseek-chat"),
-            summary_model_name=getattr(args, 'summary_model_name', "deepseek-reasoner"),
+            model_name=getattr(args, 'model_name', "deepseek-v4-flash"),
+            summary_model_name=getattr(args, 'summary_model_name', "deepseek-v4-pro"),
             concurrency=getattr(args, 'concurrency', 8),
             chunk_size=getattr(args, 'chunk_size_for_translation', 10),
             enable_merge=not getattr(args, 'no_merge', False),
@@ -80,6 +86,18 @@ class TranslatorConfig:
         
         if self.chunk_size < 1 or self.chunk_size > 50:
             return f"Chunk size must be 1-50, got {self.chunk_size}"
+        
+        # Check for deprecated models
+        if self.model_name in self.DEPRECATED_MODELS:
+            logger.warning(
+                f"Model '{self.model_name}' is deprecated and will be removed in a future version. "
+                f"Please update to a newer model."
+            )
+        if self.summary_model_name in self.DEPRECATED_MODELS:
+            logger.warning(
+                f"Summary model '{self.summary_model_name}' is deprecated and will be removed in a future version. "
+                f"Please update to a newer model."
+            )
         
         return None
 
