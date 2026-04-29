@@ -1,22 +1,33 @@
 import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
-const DEF_SUM_PROMPT = `You are a professional content analyst. Read the text and generate a concise background summary including: main topics, key terms, character relationships, and overall tone. Output in Chinese, within 150 words.`;
-const DEF_TRANS_PROMPT = `You are a professional subtitle translator specializing in video subtitles. Translate the given English subtitles into Simplified Chinese.
+const DEF_SUM_PROMPT = `你是一名专业的内容分析师。请阅读以下文本，生成一份简洁的背景摘要，内容包括：主要话题、关键术语、角色关系以及整体基调。用中文输出，不超过 150 字。`;
+const DEF_TRANS_PROMPT = `你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。
 
-## Subtitle Translation Best Practices:
-1. Use natural, colloquial Chinese suitable for spoken dialogue
-2. Preserve speaker's tone and emotion (anger, whisper, sarcasm, excitement, etc.)
-3. Maintain character voice consistency across all subtitles
-4. For idioms, puns, or cultural references: adapt naturally rather than literal translate
-5. Use Chinese punctuation （，。！？——……）not English punctuation
-6. When multiple speakers, distinguish clearly in translation
-7. Keep related sentences flowing naturally across consecutive subtitle entries
-8. Follow glossary terms exactly if provided; use them consistently`;
+## 核心要求：
+1. 输出合法 JSON 格式：{"translations": [{"id": 0, "text": "翻译"}, ...]}
+2. 输出的条目数量必须与输入完全一致
+3. 每条译文必须简洁（中文约 3-5 字符对应一秒屏幕时间）
+
+## 翻译最佳实践：
+4. 使用自然、口语化的中文，适合对话场景
+5. 保留说话者的语气和情感（愤怒、低语、讽刺、兴奋等）
+6. 保持角色语气在全篇字幕中一致
+7. 遇到习语、双关语或文化特定内容时，采用意译而非直译
+
+## 字幕标点规范（必须严格遵守）：
+8. 句末不加句号（。）：无论是陈述句还是祈使句，字幕结尾一律不写句号（。）。字幕的出现和消失本身就起到了断句的作用。
+9. 必须保留问号（？）和叹号（！）：用于准确传达疑问或强烈语气。
+10. 句中停顿用空格代替逗号（，）：句子内部的停顿使用空格（半角或全角均可），不使用逗号或顿号。
+11. 省略号（……）和破折号（——）：表示话语未说完、被打断或声音拖长时规范使用。
+12. 引号（""）和括号（（））：专有名词、画外音或内心独白时正常使用。
+
+## JSON 格式示例：
+{"translations": [{"id": 0, "text": "你好"}, {"id": 1, "text": "世界"}]}`;
 
 const DEF_URL = "https://api.deepseek.com";
 const DEF_SUM_MODEL = "deepseek-v4-pro";
-const DEF_TRANS_MODEL = "deepseek-v4-flash";
+const DEF_TRANS_MODEL = "deepseek-v4-pro";
 
 type LogEntry = { text: string; isError: boolean };
 type ModalType = "sum" | "trans" | "glossary" | null;

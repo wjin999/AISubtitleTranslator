@@ -54,13 +54,12 @@ def classify_error(error: Exception) -> tuple[APIErrorType, bool]:
 
 
 async def call_llm_async(
-    client: AsyncOpenAI, 
-    model: str, 
-    messages: List[Dict[str, str]], 
-    temperature: float = 0.3, 
+    client: AsyncOpenAI,
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float = 0.3,
     max_retries: int = 3,
     json_mode: bool = False,
-    timeout: float = 60.0
 ) -> str:
     """
     Make async call to LLM API with retry logic.
@@ -72,7 +71,6 @@ async def call_llm_async(
         temperature: Sampling temperature
         max_retries: Maximum retry attempts
         json_mode: Whether to request JSON response format
-        timeout: Request timeout in seconds
         
     Returns:
         Response content as string, empty string on failure

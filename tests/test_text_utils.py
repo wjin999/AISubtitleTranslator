@@ -17,11 +17,11 @@ class TestCleanTranslatedText:
     
     def test_preserve_chinese_punctuation(self):
         text = "你好，世界！这是测试。"
-        # Should not remove Chinese punctuation
+        # Should preserve mid-sentence punctuation, remove trailing period
         result = clean_translated_text(text)
-        assert "，" in result
-        assert "！" in result
-        assert "。" in result
+        assert "，" in result     # 句中逗号保留
+        assert "！" in result     # 叹号保留
+        assert "。" not in result  # 句末句号移除（字幕规范）
     
     def test_normalize_whitespace(self):
         assert clean_translated_text("  hello   world  ") == "hello world"

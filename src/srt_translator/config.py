@@ -23,13 +23,13 @@ class TranslatorConfig:
     # API settings
     api_key: Optional[str] = None
     base_url: str = "https://api.deepseek.com"
-    model_name: str = "deepseek-v4-flash"
+    model_name: str = "deepseek-v4-pro"
     summary_model_name: str = "deepseek-v4-pro"
     
     # Processing settings
     concurrency: int = 8
     chunk_size: int = 10
-    context_window: int = 3
+    context_window: int = 7
     
     # Merge settings
     enable_merge: bool = True
@@ -43,8 +43,8 @@ class TranslatorConfig:
     save_progress: bool = True
     progress_file: Optional[Path] = None
     
-    # Deprecated model names that will be removed in future versions
-    DEPRECATED_MODELS = {"deepseek-chat", "deepseek-reasoner"}
+    # Deprecated model names
+    DEPRECATED_MODELS = {"deepseek-reasoner"}
     
     def __post_init__(self):
         """Load API key from environment if not provided."""
@@ -62,7 +62,7 @@ class TranslatorConfig:
         return cls(
             api_key=api_key,
             base_url=getattr(args, 'base_url', "https://api.deepseek.com"),
-            model_name=getattr(args, 'model_name', "deepseek-v4-flash"),
+            model_name=getattr(args, 'model_name', "deepseek-v4-pro"),
             summary_model_name=getattr(args, 'summary_model_name', "deepseek-v4-pro"),
             concurrency=getattr(args, 'concurrency', 8),
             chunk_size=getattr(args, 'chunk_size_for_translation', 10),

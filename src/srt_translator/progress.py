@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,9 @@ class TranslationProgress:
     started_at: str
     updated_at: str
     
+    # 缓存本次 mark_completed 新增的翻译结果（用于增量保存）
+    _last_chunk_results: Dict[int, str] = field(default_factory=dict, repr=False)
+    
     @classmethod
     def create(cls, input_file: str, total_chunks: int) -> "TranslationProgress":
         """创建新的进度记录。"""
@@ -36,12 +39,25 @@ class TranslationProgress:
             updated_at=now,
         )
     
-    def mark_completed(self, chunk_idx: int, results: Dict[int, str]) -> None:
-        """标记 chunk 完成并保存翻译结果。"""
+    def mark_completed(self, chunk_idx: int, results: Dict[int, str]) -> Dict[int, str]:
+        """
+        标记 chunk 完成并保存翻译结果。
+        
+        Returns:
+            本次新增的翻译结果 dict（用于增量保存）
+        """
         if chunk_idx not in self.completed_chunks:
             self.completed_chunks.append(chunk_idx)
-        self.translations.update(results)
+        
+        # 只提取本次真正新增的条目（避免重复保存已存在的）
+        new_results = {k: v for k, v in results.items() if k not in self.translations}
+        self.translations.update(new_results)
         self.updated_at = datetime.now().isoformat()
+        
+        # 缓存用于增量保存
+        self._last_chunk_results = new_results
+        
+        return new_results  # 返回增量，供外部只保存新增部分
     
     @property
     def is_complete(self) -> bool:
@@ -67,13 +83,13 @@ def get_progress_file(input_path: Path) -> Path:
 
 def save_progress(progress: TranslationProgress, path: Path) -> bool:
     """
-    保存进度到文件。
-    
-    Returns:
-        True if successful
+    [保留但弃用] 全量保存进度到文件（向后兼容）。
+    新代码请使用 save_progress_incremental()。
     """
     try:
         data = asdict(progress)
+        # 移除内部缓存字段
+        data.pop('_last_chunk_results', None)
         # 将 int keys 转换为 str (JSON 要求)
         data['translations'] = {str(k): v for k, v in data['translations'].items()}
         
@@ -87,9 +103,65 @@ def save_progress(progress: TranslationProgress, path: Path) -> bool:
         return False
 
 
+def save_progress_incremental(
+    progress: TranslationProgress,
+    path: Path,
+    new_results: Dict[int, str],
+    chunk_idx: int | None = None,  # 新增参数：用于在 NDJSON 中记录 chunk 索引
+) -> bool:
+    """
+    增量保存进度：只追加新增的翻译结果，不重写整个文件。
+    使用 NDJSON 格式（每行一个 JSON 对象），避免每次重写整个文件。
+    
+    加载时通过 load_progress() 合并所有增量行。
+    
+    文件格式：
+    {"type":"meta","input_file":"...","total_chunks":10,"started_at":"..."}
+    {"type":"chunk","chunk_idx":0,"updated_at":"...","translations":{"0":"你好","1":"世界"}}
+    {"type":"chunk","chunk_idx":1,"updated_at":"...","translations":{"2":"测试"}}
+    
+    Args:
+        progress: 进度对象
+        path: 进度文件路径
+        new_results: 本次新增的翻译结果 {index: text}
+        chunk_idx: 可选，当前 chunk 的索引（用于精确恢复 completed_chunks）
+    
+    Returns:
+        True if successful
+    """
+    try:
+        with path.open('a', encoding='utf-8') as f:
+            # 文件不存在或为空时，先写 meta 信息
+            if not path.exists() or path.stat().st_size == 0:
+                meta = {
+                    "type": "meta",
+                    "input_file": progress.input_file,
+                    "total_chunks": progress.total_chunks,
+                    "started_at": progress.started_at,
+                }
+                f.write(json.dumps(meta, ensure_ascii=False) + '\n')
+            
+            # 只追加本次新增的翻译结果
+            if new_results:
+                # 将 int keys 转为 str
+                str_results = {str(k): v for k, v in new_results.items()}
+                data = {
+                    "type": "chunk",
+                    "chunk_idx": chunk_idx,
+                    "updated_at": progress.updated_at,
+                    "translations": str_results,
+                }
+                f.write(json.dumps(data, ensure_ascii=False) + '\n')
+        
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save progress incremental: {e}")
+        return False
+
+
 def load_progress(path: Path) -> Optional[TranslationProgress]:
     """
-    从文件加载进度。
+    从文件加载进度（同时支持旧的全量 JSON 和新的 NDJSON 格式）。
     
     Returns:
         TranslationProgress if found and valid, None otherwise
@@ -98,13 +170,57 @@ def load_progress(path: Path) -> Optional[TranslationProgress]:
         return None
     
     try:
-        with path.open('r', encoding='utf-8') as f:
-            data = json.load(f)
+        content = path.read_text(encoding='utf-8').strip()
+        if not content:
+            return None
         
-        # 将 str keys 转换回 int
-        data['translations'] = {int(k): v for k, v in data['translations'].items()}
+        # 尝试解析为 NDJSON（多行）
+        lines = content.split('\n')
         
-        return TranslationProgress(**data)
+        if len(lines) == 1:
+            # 旧格式：单行全量 JSON
+            data = json.loads(lines[0])
+            data['translations'] = {int(k): v for k, v in data['translations'].items()}
+            # 移除可能的内部字段
+            data.pop('_last_chunk_results', None)
+            return TranslationProgress(**data)
+        else:
+            # 新格式：NDJSON，逐行合并
+            meta_line = json.loads(lines[0])
+            if meta_line.get('type') != 'meta':
+                logger.warning("Invalid NDJSON progress file: first line is not meta")
+                return None
+            
+            translations: Dict[int, str] = {}
+            completed_chunks: List[int] = []
+            last_updated = meta_line.get('started_at', '')
+            
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+                data = json.loads(line)
+                if data.get('type') == 'chunk':
+                    chunk_translations = data.get('translations', {})
+                    for k, v in chunk_translations.items():
+                        translations[int(k)] = v
+                    last_updated = data.get('updated_at', last_updated)
+                    # 直接从 chunk 行恢复 chunk_idx，避免推断
+                    cidx = data.get('chunk_idx')
+                    if cidx is not None:
+                        completed_chunks.append(cidx)
+            
+            total_chunks = meta_line.get('total_chunks', 0)
+            
+            progress = TranslationProgress(
+                input_file=meta_line.get('input_file', ''),
+                total_chunks=total_chunks,
+                completed_chunks=completed_chunks,
+                translations=translations,
+                started_at=meta_line.get('started_at', ''),
+                updated_at=last_updated,
+            )
+            return progress
+            
     except Exception as e:
         logger.warning(f"Failed to load progress file: {e}")
         return None

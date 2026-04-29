@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from pathlib import Path
 from typing import Callable, Dict, List, Awaitable, Optional
 
 from openai import AsyncOpenAI
@@ -16,7 +17,7 @@ from .translator import (
     generate_context_summary,
 )
 from .text_utils import clean_translated_text
-from .progress import TranslationProgress
+from .progress import TranslationProgress, save_progress_incremental
 
 
 class TranslationPipeline:
@@ -24,6 +25,10 @@ class TranslationPipeline:
 
     def __init__(self, config: TranslatorConfig):
         self.config = config
+        # 进度文件路径（由调用方传入，用于自动增量保存）
+        self._progress_path: Optional[Path] = None
+        # 翻译记忆：原文 -> 译文，用于跨 chunk 的术语一致性
+        self._translation_memory: Dict[str, str] = {}
 
     async def run(
         self,
@@ -35,6 +40,7 @@ class TranslationPipeline:
         existing_summary: str | None = None,
         summary_prompt: str | None = None,
         translation_prompt: str | None = None,
+        progress_path: Path | None = None,  # 新增参数
     ) -> Dict[int, str]:
         """
         Execute the complete translation pipeline.
@@ -48,11 +54,13 @@ class TranslationPipeline:
             existing_summary: Pre-existing summary for resume.
             summary_prompt: Optional custom prompt for summary generation.
             translation_prompt: Optional custom prompt for translation (reserved for future use).
+            progress_path: Optional path for incremental progress file saving.
 
         Returns:
             Dict mapping global_index -> translated_text.
         """
         config = self.config
+        self._progress_path = progress_path
 
         # 1. Extract all texts in order
         all_texts = [e.text for e in entries]
@@ -65,12 +73,25 @@ class TranslationPipeline:
         ]
         total_chunks = len(chunks)
 
-        # 3. Generate context summary if not already available
+        # 3. Generate context summary - 均匀5段采样
         summary = existing_summary or ""
         if not summary:
-            full_text = "\n".join(all_texts)
+            num_segments = 5
+            total_entries = len(all_texts)
+
+            if total_entries <= num_segments * 2:
+                # 文本较短，直接拼接全部
+                truncated = "\n".join(all_texts)
+            else:
+                # 均匀采样5段，覆盖全文各个位置
+                sampled_texts = []
+                for i in range(num_segments):
+                    idx = int(i * total_entries / num_segments)
+                    sampled_texts.append(all_texts[idx])
+                truncated = "\n".join(sampled_texts)
+
             summary = await generate_context_summary(
-                full_text, client, config.summary_model_name,
+                truncated, client, config.summary_model_name,
                 custom_prompt=summary_prompt,
             )
 
@@ -123,6 +144,7 @@ class TranslationPipeline:
                 model=config.model_name,
                 sem=sem,
                 custom_translation_prompt=_translation_prompt,
+                translation_memory=self._translation_memory,
             )
 
             # Process results: clean + validate, fallback to original on failure
@@ -132,13 +154,24 @@ class TranslationPipeline:
                     cleaned = clean_translated_text(r.translated)
                     results_dict[r.index] = cleaned
                     chunk_translations[r.index] = cleaned
+                    # 将成功翻译的条目加入翻译记忆
+                    self._translation_memory[r.original] = cleaned
                 else:
                     results_dict[r.index] = r.original
                     chunk_translations[r.index] = r.original
 
-            # Update progress
+            # 限制翻译记忆大小，避免膨胀
+            if len(self._translation_memory) > 200:
+                # 保留最近 100 条
+                items = list(self._translation_memory.items())
+                self._translation_memory = dict(items[-100:])
+
+            # Update progress - 改为增量保存
             if progress:
-                progress.mark_completed(chunk_idx, chunk_translations)
+                new_results = progress.mark_completed(chunk_idx, chunk_translations)
+                # 自动增量保存到文件
+                if self._progress_path:
+                    save_progress_incremental(progress, self._progress_path, new_results, chunk_idx)
 
             return chunk_idx, chunk_translations
 

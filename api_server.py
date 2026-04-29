@@ -2,6 +2,9 @@ import os
 import sys
 import uuid
 import shutil
+import time
+import asyncio
+import logging
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
@@ -31,11 +34,44 @@ WORK_DIR = Path("workspace")
 WORK_DIR.mkdir(exist_ok=True)
 
 JOB_STATE = {}
+JOB_CLEANUP_INTERVAL = 300  # 每 5 分钟检查一次过期任务
+JOB_RETENTION_SECONDS = 600  # 完成任务保留 10 分钟后清理
+MAX_LOGS = 200  # 每个任务最大日志条数
+MAX_CONCURRENT_JOBS = 5  # 最大并发翻译任务数
+
+logger = logging.getLogger("api_server")
+
 
 def log_msg(job_id: str, msg: str, is_error: bool = False):
     if job_id in JOB_STATE:
         prefix = "[错误] " if is_error else "- "
-        JOB_STATE[job_id]["logs"].append({"text": prefix + msg, "isError": is_error})
+        logs = JOB_STATE[job_id]["logs"]
+        logs.append({"text": prefix + msg, "isError": is_error})
+        # 限制日志数量，保留最新的 MAX_LOGS 条
+        if len(logs) > MAX_LOGS:
+            # 保留开头和结尾的重要日志
+            logs[:] = logs[:10] + logs[-(MAX_LOGS - 10):]
+
+
+async def cleanup_expired_jobs():
+    """定期清理过期的 JOB_STATE 条目。"""
+    while True:
+        await asyncio.sleep(JOB_CLEANUP_INTERVAL)
+        now = time.time()
+        expired_ids = [
+            job_id for job_id, state in JOB_STATE.items()
+            if state.get("completed_at") is not None
+            and now - state["completed_at"] > JOB_RETENTION_SECONDS
+        ]
+        for job_id in expired_ids:
+            del JOB_STATE[job_id]
+            logger.info(f"Cleaned up expired job: {job_id}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(cleanup_expired_jobs())
+
 
 async def process_translation_job(
     job_id: str,
@@ -50,17 +86,6 @@ async def process_translation_job(
         JOB_STATE[job_id]["status"] = "running"
         JOB_STATE[job_id]["progress_pct"] = 2
         log_msg(job_id, "开始读取字幕文件...")
-        
-        # --- 核心新增：动态覆写术语表文件 ---
-        if glossary_text and glossary_text.strip():
-            # 写入当前运行目录的 glossary.txt，供后端的 Glossary() 类读取
-            with open("glossary.txt", "w", encoding="utf-8") as gf:
-                gf.write(glossary_text.strip())
-            log_msg(job_id, "已载入自定义术语表。")
-        else:
-            # 如果前端为空，清空本地术语表避免污染
-            if os.path.exists("glossary.txt"):
-                open("glossary.txt", "w", encoding="utf-8").close()
         
         content = input_path.read_text(encoding="utf-8-sig")
         entries = parse_srt(content)
@@ -78,14 +103,23 @@ async def process_translation_job(
         else:
             merged_entries = [e.copy() for e in entries]
             
-        all_texts = [e.text for e in merged_entries]
         client = create_client(config.api_key, config.base_url)
         
-        # 构建 Glossary 对象（从 glossary.txt 文件读取）
+        # 构建 Glossary 对象（直接从字符串解析，避免文件并发竞争）
         glossary_obj = Glossary()
-        if os.path.exists("glossary.txt"):
-            from srt_translator.glossary import load_glossary
-            glossary_obj = load_glossary(Path("glossary.txt"))
+        if glossary_text and glossary_text.strip():
+            import re
+            for line in glossary_text.strip().split('\n'):
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                # 支持 = 和 -> 两种分隔符
+                match = re.match(r'^(.+?)\s*(?:=|->)\s*(.+)$', line)
+                if match:
+                    term, translation = match.groups()
+                    glossary_obj.add(term, translation)
+            if glossary_obj:
+                log_msg(job_id, "已载入自定义术语表。")
         
         JOB_STATE[job_id]["progress_pct"] = 10
         log_msg(job_id, "正在翻译中...")
@@ -100,6 +134,8 @@ async def process_translation_job(
             return callback
         
         # 创建管道并执行翻译
+        # API 模式不传 progress_path，因为 API 任务是短生命周期的，
+        # 不需要磁盘持久化进度文件来支持断点续翻
         pipeline = TranslationPipeline(config)
         translations = await pipeline.run(
             entries=merged_entries,
@@ -118,11 +154,13 @@ async def process_translation_job(
         
         JOB_STATE[job_id]["progress_pct"] = 100
         JOB_STATE[job_id]["status"] = "completed"
+        JOB_STATE[job_id]["completed_at"] = time.time()
         log_msg(job_id, f"全部任务完成！文件位置: {output_path}")
         
     except Exception as e:
         JOB_STATE[job_id]["status"] = "error"
         JOB_STATE[job_id]["error"] = str(e)
+        JOB_STATE[job_id]["completed_at"] = time.time()
         log_msg(job_id, str(e), is_error=True)
 
 
@@ -133,13 +171,24 @@ async def translate_endpoint(
     api_key: str = Form(""),
     base_url: str = Form("https://api.deepseek.com"),
     summary_model_name: str = Form("deepseek-v4-pro"),
-    model_name: str = Form("deepseek-v4-flash"),
+    model_name: str = Form("deepseek-v4-pro"),
     summary_prompt: str = Form(None),
     translation_prompt: str = Form(None),
-    glossary: str = Form(""), # 新增：接收前端术语表
+    glossary: str = Form(""),
     save_path: str = Form(""),
     concurrency: int = Form(8)
 ):
+    # 检查并发任务数
+    running_jobs = sum(
+        1 for s in JOB_STATE.values()
+        if s.get("status") in ("running", "pending")
+    )
+    if running_jobs >= MAX_CONCURRENT_JOBS:
+        return {
+            "status": "error",
+            "error": f"服务器繁忙，当前已有 {running_jobs} 个任务在运行（最大并发: {MAX_CONCURRENT_JOBS}）。请稍后再试。"
+        }
+    
     job_id = str(uuid.uuid4())
     input_path = WORK_DIR / f"{job_id}_{file.filename}"
     
@@ -160,9 +209,11 @@ async def translate_endpoint(
     )
     
     JOB_STATE[job_id] = {
-        "status": "pending", "progress_pct": 0, 
-        "logs": [{"text": f"- 已接收文件: {file.filename}", "isError": False}], 
-        "error": None
+        "status": "pending", "progress_pct": 0,
+        "logs": [{"text": f"- 已接收文件: {file.filename}", "isError": False}],
+        "error": None,
+        "created_at": time.time(),
+        "completed_at": None,
     }
     
     background_tasks.add_task(process_translation_job, job_id, input_path, output_path, config, summary_prompt, translation_prompt, glossary)
@@ -174,6 +225,30 @@ async def get_status(job_id: str):
     if job_id not in JOB_STATE: return {"status": "error", "error": "任务 ID 不存在"}
     state = JOB_STATE[job_id]
     return {"status": state["status"], "progress": state["progress_pct"], "error": state["error"], "logs": state["logs"]}
+
+
+@app.post("/api/cancel/{job_id}")
+async def cancel_job(job_id: str):
+    """取消一个正在执行或等待中的翻译任务。"""
+    if job_id not in JOB_STATE:
+        return {"status": "error", "error": "任务 ID 不存在"}
+    
+    state = JOB_STATE[job_id]
+    current_status = state.get("status")
+    
+    if current_status in ("completed", "error"):
+        return {"status": "error", "error": f"任务已结束（状态: {current_status}），无法取消。"}
+    
+    if current_status == "cancelled":
+        return {"status": "error", "error": "任务已被取消。"}
+    
+    # 标记为取消状态
+    JOB_STATE[job_id]["status"] = "cancelled"
+    JOB_STATE[job_id]["completed_at"] = time.time()
+    log_msg(job_id, "任务已被用户取消。")
+    
+    return {"status": "success", "job_id": job_id, "message": "任务已取消。"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

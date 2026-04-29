@@ -39,6 +39,11 @@ def clean_translated_text(text: str) -> str:
     # 3. 移除多余的特殊字符，但保留正常标点
     text = re.sub(REMOVABLE_PUNCTUATION, ' ', text)
     
+    # 3.5 移除中文句尾的句号（影视剧字幕规范：句末不加句号）
+    # 但保留问号和叹号
+    text = re.sub(r'[。]+$', '', text)  # 移除末尾句号
+    text = re.sub(r'([？！……])[。]+', r'\1', text)  # 问号/叹号/省略号后面的句号
+    
     # 4. 标准化空格
     text = re.sub(r'\s+', ' ', text).strip()
     

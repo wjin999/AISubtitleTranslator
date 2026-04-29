@@ -19,7 +19,7 @@ from .translator import translate_chunk_task, generate_context_summary, Translat
 from .glossary import load_glossary, Glossary, find_matching_terms
 from .text_utils import clean_translated_text, validate_translation
 from .config import TranslatorConfig
-from .progress import TranslationProgress, save_progress, load_progress
+from .progress import TranslationProgress, save_progress, load_progress, save_progress_incremental
 from .pipeline import TranslationPipeline
 
 __all__ = [
@@ -50,5 +50,6 @@ __all__ = [
     "validate_translation",
     # Progress
     "save_progress",
+    "save_progress_incremental",
     "load_progress",
 ]

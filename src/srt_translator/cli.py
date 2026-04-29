@@ -67,7 +67,7 @@ Examples:
     # API options
     parser.add_argument("--api-key", help="API key (or set DEEPSEEK_API_KEY)")
     parser.add_argument("--base-url", default="https://api.deepseek.com")
-    parser.add_argument("--model", dest="model_name", default="deepseek-v4-flash")
+    parser.add_argument("--model", dest="model_name", default="deepseek-v4-pro")
     parser.add_argument("--summary-model", dest="summary_model_name", default="deepseek-v4-pro")
     
     # Performance
@@ -156,11 +156,9 @@ async def main_async(args: argparse.Namespace) -> int:
     # 创建 tqdm 进度条
     pbar = tqdm(total=total_chunks, desc="Translating", unit="chunk")
     
-    # 进度回调：更新 tqdm 进度条 + 保存到磁盘
+    # 进度回调：仅更新 tqdm 进度条
     def _update_progress(chunk_idx: int, pct: int):
         pbar.update(1)
-        if progress_path:
-            save_progress(progress, progress_path)
     
     # 创建管道并执行翻译
     pipeline = TranslationPipeline(config)
@@ -170,6 +168,7 @@ async def main_async(args: argparse.Namespace) -> int:
         client=client,
         progress=progress,
         on_progress=_update_progress,
+        progress_path=progress_path,  # 传入进度文件路径，由 pipeline 自动增量保存
     )
     
     pbar.close()
@@ -208,7 +207,8 @@ def main() -> None:
         exit_code = asyncio.run(main_async(args))
         sys.exit(exit_code)
     except KeyboardInterrupt:
-        print("\nInterrupted by user. Progress saved.")
+        # 翻译过程中每 chunk 都会增量保存进度，因此中断时进度已自动保存
+        print("\nInterrupted by user.")
         sys.exit(130)
     except Exception as e:
         logging.error(f"Fatal error: {e}")
