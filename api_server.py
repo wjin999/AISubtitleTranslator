@@ -250,5 +250,11 @@ async def cancel_job(job_id: str):
     return {"status": "success", "job_id": job_id, "message": "任务已取消。"}
 
 
+@app.get("/api/health")
+async def health_check():
+    """后端健康检查接口，供前端轮询判断服务是否就绪。"""
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

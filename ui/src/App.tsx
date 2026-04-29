@@ -91,8 +91,33 @@ function App() {
   const run = async () => {
     if (!file) return;
     setIsWorking(true); setProgress(0); setIsError(false);
+    setStatus("正在启动后台服务...");
+    setLogs([{text: "- 正在启动后台服务，请稍候...", isError: false}]);
+
+    // 等待后端服务就绪（最多重试 15 秒）
+    let backendReady = false;
+    for (let i = 0; i < 30; i++) {  // 30 次 × 500ms = 15 秒
+      try {
+        const healthRes = await fetch("http://127.0.0.1:8000/api/health", { method: "GET" });
+        if (healthRes.ok) {
+          backendReady = true;
+          break;
+        }
+      } catch (_) {
+        // 服务尚未就绪，继续等待
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    if (!backendReady) {
+      setIsWorking(false); setIsError(true);
+      setLogs(prev => [...prev, {text: "[错误] 无法连接到本地后台服务，请确认没有其他程序占用 8000 端口", isError: true}]);
+      setStatus("连接失败");
+      return;
+    }
+
     setStatus("正在准备翻译...");
-    setLogs([{text: "- 正在连接后台服务...", isError: false}]);
+    setLogs(prev => [...prev, {text: "- 后台服务就绪，开始提交翻译...", isError: false}]);
 
     const form = new FormData();
     form.append("file", file);
@@ -138,9 +163,9 @@ function App() {
           }
         }, 1000);
       }
-    } catch (e) { 
+    } catch (e) {
       setIsWorking(false); setIsError(true);
-      setLogs(prev => [...prev, {text: "[错误] 无法连接到本地服务，请确认 Python 后台已运行", isError: true}]);
+      setLogs(prev => [...prev, {text: "[错误] 无法连接到本地后台服务", isError: true}]);
       setStatus("连接失败");
     }
   };
