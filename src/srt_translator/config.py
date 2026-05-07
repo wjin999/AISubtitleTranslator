@@ -23,16 +23,15 @@ class TranslatorConfig:
     # API settings
     api_key: Optional[str] = None
     base_url: str = "https://api.deepseek.com"
-    model_name: str = "deepseek-v4-pro"
-    summary_model_name: str = "deepseek-v4-pro"
+    model_name: str = "deepseek-v4-pro"          # 默认模型，可通过 DEEPSEEK_MODEL 环境变量覆盖
+    summary_model_name: str = "deepseek-v4-pro"  # 默认摘要模型，可通过 DEEPSEEK_SUMMARY_MODEL 覆盖
     
     # Processing settings
     concurrency: int = 8
     chunk_size: int = 10
     context_window: int = 7
     
-    # Merge settings
-    enable_merge: bool = True
+    # Merge settings (spaCy smart merging is always enabled)
     max_chars_per_entry: int = 300
     merge_time_gap: float = 1.5
     
@@ -53,20 +52,30 @@ class TranslatorConfig:
     
     @classmethod
     def from_args(cls, args) -> "TranslatorConfig":
-        """Create config from argparse namespace."""
-        # 只从 args 或环境变量读取一次
+        """Create config from argparse namespace.
+
+        Precedence: CLI arg > env var > default ("deepseek-v4-pro").
+        """
         api_key = getattr(args, 'api_key', None)
         if not api_key:
             api_key = os.environ.get("DEEPSEEK_API_KEY")
-        
+
+        model_name = getattr(args, 'model_name', None)
+        if model_name is None:
+            model_name = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
+
+        summary_model_name = getattr(args, 'summary_model_name', None)
+        if summary_model_name is None:
+            summary_model_name = os.environ.get("DEEPSEEK_SUMMARY_MODEL", "deepseek-v4-pro")
+
         return cls(
             api_key=api_key,
             base_url=getattr(args, 'base_url', "https://api.deepseek.com"),
-            model_name=getattr(args, 'model_name', "deepseek-v4-pro"),
-            summary_model_name=getattr(args, 'summary_model_name', "deepseek-v4-pro"),
+            model_name=model_name,
+            summary_model_name=summary_model_name,
             concurrency=getattr(args, 'concurrency', 8),
             chunk_size=getattr(args, 'chunk_size_for_translation', 10),
-            enable_merge=not getattr(args, 'no_merge', False),
+            context_window=getattr(args, 'context_window', 7),
             max_chars_per_entry=getattr(args, 'max_chars_per_entry', 300),
             merge_time_gap=getattr(args, 'merge_time_gap', 1.5),
         )

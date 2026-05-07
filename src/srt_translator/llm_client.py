@@ -60,6 +60,7 @@ async def call_llm_async(
     temperature: float = 0.3,
     max_retries: int = 3,
     json_mode: bool = False,
+    max_tokens: int | None = None,
 ) -> str:
     """
     Make async call to LLM API with retry logic.
@@ -71,6 +72,7 @@ async def call_llm_async(
         temperature: Sampling temperature
         max_retries: Maximum retry attempts
         json_mode: Whether to request JSON response format
+        max_tokens: Maximum output tokens (important for JSON mode to prevent truncation)
         
     Returns:
         Response content as string, empty string on failure
@@ -86,6 +88,8 @@ async def call_llm_async(
             }
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
+            if max_tokens is not None:
+                params["max_tokens"] = max_tokens
 
             response = await client.chat.completions.create(**params)
             content = response.choices[0].message.content
@@ -145,7 +149,7 @@ async def call_llm_with_fallback(
 
 
 def create_client(
-    api_key: str,
+    api_key: str | None,
     base_url: str = "https://api.deepseek.com",
     timeout: float = 60.0
 ) -> AsyncOpenAI:

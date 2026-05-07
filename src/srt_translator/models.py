@@ -54,9 +54,15 @@ class SrtEntry:
     
     def copy(self, **changes) -> "SrtEntry":
         """Create a copy with optional field changes."""
-        return SrtEntry(
+        new = SrtEntry(
             index=changes.get('index', self.index),
             start=changes.get('start', self.start),
             end=changes.get('end', self.end),
             text=changes.get('text', self.text),
         )
+        # 携带缓存的解析值
+        if 'start' not in changes and self._start_cache is not None:
+            new._start_cache = self._start_cache
+        if 'end' not in changes and self._end_cache is not None:
+            new._end_cache = self._end_cache
+        return new

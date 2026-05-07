@@ -6,11 +6,7 @@ import re
 
 
 # 需要清理的标点（不包括中文常用标点）
-REMOVABLE_PUNCTUATION = r'[#*\-_=+|\\<>]'
-
-# 中文标点（应该保留）
-CHINESE_PUNCTUATION = "，。！？、；：""''（）【】"
-
+REMOVABLE_PUNCTUATION = r'[#\-=+|\\<>]'
 
 def clean_translated_text(text: str) -> str:
     """
@@ -29,20 +25,30 @@ def clean_translated_text(text: str) -> str:
     
     text = text.strip()
     
-    # 1. 移除开头的列表标记 (如 "1.", "2)", "-", "*", "•")
-    text = re.sub(r'^\s*(\d+[\.:\)]\s*|[-*•]\s*)', '', text)
+    # 1. 移除开头的列表标记 (如 "1.", "2)", "-", "* ", "• ")
+    #    注意：* 必须后接空格才被视为列表标记，避免误伤 markdown **bold**
+    text = re.sub(r'^\s*(\d+[\.:\)]\s*|-\s+|\*\s+|•\s+)', '', text)
     
-    # 2. 移除 markdown 格式标记
-    text = re.sub(r'\*\*|__', '', text)  # 粗体
-    text = re.sub(r'\*|_', '', text)      # 斜体
+    # 2. 移除 markdown 格式标记（仅成对出现或首尾的）
+    # 移除 **bold** (成对)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    # 移除 __bold__ (成对)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    # 移除 *italic* (成对，但避免误伤单个星号)
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'\1', text)
+    # 移除 _italic_ (成对，但保留单词中的下划线)
+    text = re.sub(r'(?<!\w)_(?!_)(.+?)(?<!\w)_(?!_)', r'\1', text)
     
     # 3. 移除多余的特殊字符，但保留正常标点
     text = re.sub(REMOVABLE_PUNCTUATION, ' ', text)
     
-    # 3.5 移除中文句尾的句号（影视剧字幕规范：句末不加句号）
+    # 3.5 移除中日韩句尾的句号（影视剧字幕规范：句末不加句号）
     # 但保留问号和叹号
-    text = re.sub(r'[。]+$', '', text)  # 移除末尾句号
-    text = re.sub(r'([？！……])[。]+', r'\1', text)  # 问号/叹号/省略号后面的句号
+    # 在文本包含中日韩越字符时，移除句尾句号
+    # 检测范围：CJK 统一表意文字、平假名、片假名、韩文
+    if re.search(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]', text):
+        text = re.sub(r'[。]+$', '', text)  # 移除末尾句号
+        text = re.sub(r'([？！……])[。]+', r'\1', text)  # 问号/叹号/省略号后面的句号
     
     # 4. 标准化空格
     text = re.sub(r'\s+', ' ', text).strip()
@@ -87,20 +93,3 @@ def validate_translation(original: str, translated: str) -> tuple[bool, str]:
         return False, "Translation is identical to original"
     
     return True, ""
-
-
-def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
-    """
-    Truncate text to maximum length with suffix.
-    
-    Args:
-        text: Text to truncate
-        max_length: Maximum length including suffix
-        suffix: Suffix to append if truncated
-        
-    Returns:
-        Truncated text
-    """
-    if len(text) <= max_length:
-        return text
-    return text[:max_length - len(suffix)] + suffix

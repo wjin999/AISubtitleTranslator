@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import sys
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Sequence, Optional, TYPE_CHECKING
 
 from .models import SrtEntry
@@ -14,43 +18,102 @@ logger = logging.getLogger(__name__)
 
 # Global NLP model instance
 _nlp_model: Optional["spacy.Language"] = None
+_merge_executor = ThreadPoolExecutor(max_workers=1)
+
+
+def _resolve_spacy_model_path() -> str | None:
+    """Resolve en_core_web_sm model data path for PyInstaller bundles.
+
+    In a PyInstaller bundle, 'import en_core_web_sm' imports the frozen
+    module from the PYZ archive -- its __file__ is not a real filesystem
+    path. The actual model data files are extracted to sys._MEIPASS via
+    the 'datas' directive in the spec file. We must check MEIPASS first.
+    """
+    frozen = getattr(sys, 'frozen', False)
+
+    # 1. PyInstaller: look in MEIPASS where 'datas' are extracted
+    if frozen:
+        bundle = sys._MEIPASS  # type: ignore[attr-defined]
+        pkg_dir = os.path.join(bundle, 'en_core_web_sm')
+        if not os.path.isdir(pkg_dir):
+            return None
+    else:
+        # 2. Normal pip-installed environment
+        try:
+            import en_core_web_sm
+            pkg_dir = os.path.dirname(en_core_web_sm.__file__)
+        except ImportError:
+            return None
+
+    # Find the model data subdirectory (named <model_name>-<version>)
+    for entry in os.listdir(pkg_dir):
+        entry_path = os.path.join(pkg_dir, entry)
+        if os.path.isdir(entry_path) and os.path.isfile(os.path.join(entry_path, 'config.cfg')):
+            return entry_path
+
+    return None
 
 
 def init_spacy_model() -> None:
     """
     Initialize the spaCy NLP model.
-    
-    Downloads the model if not available.
+
+    Supports:
+    - pip-installed model (normal environment)
+    - PyInstaller bundled model via datas (frozen environment)
     """
     global _nlp_model
-    
+
     if _nlp_model is not None:
-        return  # 已初始化
-    
+        return
+
     try:
         import spacy
+        # Force CPU mode -- GPU detection can hang in PyInstaller bundles
+        try:
+            spacy.prefer_gpu(False)
+        except Exception:
+            pass
     except ImportError:
         raise ImportError(
-            "spaCy is required for smart merging. "
-            "Install it with 'pip install spacy' or use --no-merge flag."
+            "spaCy is required. Install it with 'pip install spacy'."
         )
-    
+
     logger.info("Initializing spaCy NLP model...")
-    
-    try:
-        _nlp_model = spacy.load(
-            "en_core_web_sm", 
-            disable=["ner", "textcat", "lemmatizer"]
-        )
-        logger.info("spaCy model loaded successfully")
-    except OSError:
-        logger.warning("Model 'en_core_web_sm' not found. Downloading...")
-        from spacy.cli import download
-        download("en_core_web_sm")
-        _nlp_model = spacy.load(
-            "en_core_web_sm", 
-            disable=["ner", "textcat", "lemmatizer"]
-        )
+
+    model_path = _resolve_spacy_model_path()
+    if model_path:
+        logger.debug(f"Loading spaCy model from: {model_path}")
+        try:
+            _nlp_model = spacy.load(
+                model_path,
+                disable=["ner", "lemmatizer"]
+            )
+            logger.info("spaCy model loaded from bundled path")
+            return
+        except Exception as e:
+            logger.error(f"Failed to load spaCy model from path: {model_path}: {e}")
+            raise OSError(
+                f"spaCy model data found at '{model_path}' but failed to load: {e}\n"
+                "The model files may be incomplete. Rebuild with: pyinstaller api-server.spec -y"
+            )
+
+    # Not frozen and no model path -- try standard pip-installed load
+    if not getattr(sys, 'frozen', False):
+        try:
+            _nlp_model = spacy.load(
+                "en_core_web_sm",
+                disable=["ner", "lemmatizer"]
+            )
+            logger.info("spaCy model loaded from pip install")
+            return
+        except OSError:
+            pass
+
+    raise OSError(
+        "spaCy model 'en_core_web_sm' not found.\n"
+        "Install: python -m spacy download en_core_web_sm"
+    )
 
 
 def _check_sentence_boundary(text1: str, text2: str) -> bool:
@@ -117,50 +180,58 @@ def should_merge(
     return _check_sentence_boundary(cur_text, next_text)
 
 
+def _apply_merge_decisions(
+    entries: Sequence[SrtEntry],
+    decisions: List[bool],
+) -> List[SrtEntry]:
+    """Apply pre-computed merge decisions to produce merged entry list."""
+    merged: List[SrtEntry] = []
+    current = entries[0].copy()
+
+    for i in range(1, len(entries)):
+        if decisions[i - 1]:
+            current = current.copy(
+                text=current.text + " " + entries[i].text,
+                end=entries[i].end,
+            )
+        else:
+            merged.append(current)
+            current = entries[i].copy()
+
+    merged.append(current)
+    return merged
+
+
 def merge_entries(
-    entries: Sequence[SrtEntry], 
+    entries: Sequence[SrtEntry],
     max_chars: int = 300,
     time_gap_threshold: float = 1.5
 ) -> List[SrtEntry]:
     """
     Merge subtitle entries using intelligent NLP-based logic.
-    
+
+    预计算所有相邻对的合并决策，避免在合并过程中因 current 文本变化
+    导致 should_merge 中对合并后文本重复 spaCy 解析。
+
     注意：此函数不会修改原始 entries，而是返回新的列表。
     """
     if not entries:
         return []
-    
     if len(entries) == 1:
         return [entries[0].copy()]
-    
-    merged: List[SrtEntry] = []
-    
-    # 创建第一个条目的副本作为当前合并目标
-    current = entries[0].copy()
-    
-    for i in range(1, len(entries)):
-        next_entry = entries[i]
-        
-        if should_merge(current, next_entry, max_chars, time_gap_threshold):
-            # 合并：更新当前条目（不修改原始对象）
-            current = current.copy(
-                text=current.text + " " + next_entry.text,
-                end=next_entry.end
-            )
-        else:
-            # 不合并：保存当前条目，开始新的合并
-            merged.append(current)
-            current = next_entry.copy()
-    
-    # 添加最后一个条目
-    merged.append(current)
-    
+
+    decisions = [
+        should_merge(entries[i], entries[i + 1], max_chars, time_gap_threshold)
+        for i in range(len(entries) - 1)
+    ]
+
+    merged = _apply_merge_decisions(entries, decisions)
     logger.info(f"Merged {len(entries)} entries into {len(merged)} entries")
     return merged
 
 
 def merge_entries_batch(
-    entries: Sequence[SrtEntry], 
+    entries: Sequence[SrtEntry],
     max_chars: int = 300,
     time_gap_threshold: float = 1.5,
     batch_size: int = 100
@@ -227,20 +298,34 @@ def merge_entries_batch(
                     should_merge_set.add(idx)
     
     # 执行合并
-    merged: List[SrtEntry] = []
-    current = entries[0].copy()
-    
-    for i in range(1, len(entries)):
-        if i - 1 in should_merge_set:
-            current = current.copy(
-                text=current.text + " " + entries[i].text,
-                end=entries[i].end
-            )
-        else:
-            merged.append(current)
-            current = entries[i].copy()
-    
-    merged.append(current)
-    
+    decisions = [(i in should_merge_set) for i in range(len(entries) - 1)]
+    merged = _apply_merge_decisions(entries, decisions)
+
     logger.info(f"Batch merged {len(entries)} entries into {len(merged)} entries")
     return merged
+
+
+async def init_spacy_model_async() -> None:
+    """Async-safe version of init_spacy_model.
+
+    Runs spaCy model loading in a thread executor so the asyncio event
+    loop is not blocked. This allows CancelledError to propagate even
+    while the model is loading (PyInstaller bundles can take 10-30s).
+    """
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(_merge_executor, init_spacy_model)
+
+
+async def merge_entries_batch_async(
+    entries: Sequence[SrtEntry],
+    max_chars: int = 300,
+    time_gap_threshold: float = 1.5,
+    batch_size: int = 100,
+) -> List[SrtEntry]:
+    """Async-safe version of merge_entries_batch."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _merge_executor,
+        merge_entries_batch,
+        entries, max_chars, time_gap_threshold, batch_size,
+    )

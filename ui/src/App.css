@@ -101,6 +101,21 @@ body {
 
 .ti8-execute.ready:active { transform: translateY(4px); box-shadow: 0 0 0 transparent; }
 
+.ti8-cancel-btn {
+  background: linear-gradient(to bottom, #333, #111);
+  border: 2px solid var(--ti8-red);
+  color: var(--ti8-red);
+  padding: 18px;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 16px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #000;
+  margin-top: 8px;
+}
+.ti8-cancel-btn:active { transform: translateY(4px); box-shadow: 0 0 0 transparent; }
+
 /* 新增：进度条样式 */
 .progress-container {
   width: 100%;

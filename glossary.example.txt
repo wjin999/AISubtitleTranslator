@@ -4,7 +4,7 @@
 
 # Character Names / 人物名称
 John = 约翰
-Mary = 玛丽
+Mary: 玛丽           # 冒号分隔符也支持
 Dr. Smith = 史密斯博士
 
 # Technical Terms / 专业术语

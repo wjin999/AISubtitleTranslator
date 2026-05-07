@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -81,28 +81,6 @@ def get_progress_file(input_path: Path) -> Path:
     return input_path.with_suffix(input_path.suffix + ".progress.json")
 
 
-def save_progress(progress: TranslationProgress, path: Path) -> bool:
-    """
-    [保留但弃用] 全量保存进度到文件（向后兼容）。
-    新代码请使用 save_progress_incremental()。
-    """
-    try:
-        data = asdict(progress)
-        # 移除内部缓存字段
-        data.pop('_last_chunk_results', None)
-        # 将 int keys 转换为 str (JSON 要求)
-        data['translations'] = {str(k): v for k, v in data['translations'].items()}
-        
-        with path.open('w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        
-        logger.debug(f"Progress saved to {path}")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to save progress: {e}")
-        return False
-
-
 def save_progress_incremental(
     progress: TranslationProgress,
     path: Path,
@@ -130,27 +108,29 @@ def save_progress_incremental(
         True if successful
     """
     try:
-        with path.open('a', encoding='utf-8') as f:
-            # 文件不存在或为空时，先写 meta 信息
-            if not path.exists() or path.stat().st_size == 0:
-                meta = {
-                    "type": "meta",
-                    "input_file": progress.input_file,
-                    "total_chunks": progress.total_chunks,
-                    "started_at": progress.started_at,
-                }
+        # 确保 meta 信息已存在（先检查再写入，减少竞态窗口）
+        is_new = not path.exists() or path.stat().st_size == 0
+        if is_new:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            meta = {
+                "type": "meta",
+                "input_file": progress.input_file,
+                "total_chunks": progress.total_chunks,
+                "started_at": progress.started_at,
+            }
+            with path.open('w', encoding='utf-8') as f:
                 f.write(json.dumps(meta, ensure_ascii=False) + '\n')
-            
-            # 只追加本次新增的翻译结果
-            if new_results:
-                # 将 int keys 转为 str
-                str_results = {str(k): v for k, v in new_results.items()}
-                data = {
-                    "type": "chunk",
-                    "chunk_idx": chunk_idx,
-                    "updated_at": progress.updated_at,
-                    "translations": str_results,
-                }
+        
+        # 追加写入 chunk 数据
+        if new_results:
+            str_results = {str(k): v for k, v in new_results.items()}
+            data = {
+                "type": "chunk",
+                "chunk_idx": chunk_idx,
+                "updated_at": progress.updated_at,
+                "translations": str_results,
+            }
+            with path.open('a', encoding='utf-8') as f:
                 f.write(json.dumps(data, ensure_ascii=False) + '\n')
         
         return True

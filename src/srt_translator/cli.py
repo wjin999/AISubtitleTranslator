@@ -20,7 +20,6 @@ from .llm_client import create_client
 from .progress import (
     TranslationProgress,
     get_progress_file,
-    save_progress,
     load_progress,
     delete_progress,
 )
@@ -54,25 +53,36 @@ Examples:
     
     # Positional arguments
     parser.add_argument("input_path", help="Input SRT file path")
-    parser.add_argument("output_path", nargs='?', default=None, help="Output SRT file path")
+    parser.add_argument(
+        "positional_output_path",
+        nargs="?",
+        default=None,
+        help="Output SRT file path",
+    )
     
     # Glossary
     parser.add_argument("-g", "--glossary", dest="glossary_path", help="Glossary file path")
     
     # Processing options
-    parser.add_argument("--no-merge", action="store_true", help="Disable smart merging")
+    parser.add_argument("-o", "--output", dest="output_path", help="Output SRT file path")
+    parser.add_argument("--no-merge", action="store_true", help="Disable spaCy smart merging")
     parser.add_argument("--max-chars", dest="max_chars_per_entry", type=int, default=300)
     parser.add_argument("--merge-gap", dest="merge_time_gap", type=float, default=1.5)
     
     # API options
     parser.add_argument("--api-key", help="API key (or set DEEPSEEK_API_KEY)")
     parser.add_argument("--base-url", default="https://api.deepseek.com")
-    parser.add_argument("--model", dest="model_name", default="deepseek-v4-pro")
-    parser.add_argument("--summary-model", dest="summary_model_name", default="deepseek-v4-pro")
+    parser.add_argument("--model", dest="model_name", default=None)
+    parser.add_argument("--summary-model", dest="summary_model_name", default=None)
+    
+    # Custom prompts
+    parser.add_argument("--summary-prompt", help="自定义概括提示词（覆盖默认）")
+    parser.add_argument("--translation-prompt", help="自定义翻译提示词（覆盖默认）")
     
     # Performance
     parser.add_argument("--concurrency", type=int, default=8, help="Max concurrent requests")
     parser.add_argument("--chunk-size", dest="chunk_size_for_translation", type=int, default=10)
+    parser.add_argument("--context-window", dest="context_window", type=int, default=7, help="上下文窗口大小，控制每个 chunk 前后的额外上下文条目数量")
     
     # Progress
     parser.add_argument("--resume", action="store_true", help="Resume from saved progress")
@@ -81,7 +91,13 @@ Examples:
     # Misc
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
     
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.output_path and args.positional_output_path:
+        parser.error("output path specified twice; use either positional output or -o/--output")
+    if args.output_path is None:
+        args.output_path = args.positional_output_path
+    delattr(args, "positional_output_path")
+    return args
 
 
 async def main_async(args: argparse.Namespace) -> int:
@@ -122,17 +138,17 @@ async def main_async(args: argparse.Namespace) -> int:
         logger.info(f"Auto-detected '{DEFAULT_GLOSSARY_FILENAME}'")
         glossary = load_glossary(Path(DEFAULT_GLOSSARY_FILENAME))
     
-    # 智能合并
-    if config.enable_merge:
+    # spaCy smart merging
+    if getattr(args, "no_merge", False):
+        logger.info("Smart merging disabled")
+        merged_entries = [entry.copy() for entry in entries]
+    else:
         init_spacy_model()
         merged_entries = merge_entries_batch(
             entries,
             config.max_chars_per_entry,
             config.merge_time_gap
         )
-    else:
-        logger.info("Merging disabled")
-        merged_entries = [e.copy() for e in entries]
     
     # 进度管理
     progress_path = get_progress_file(in_path) if not args.no_progress else None
@@ -156,9 +172,14 @@ async def main_async(args: argparse.Namespace) -> int:
     # 创建 tqdm 进度条
     pbar = tqdm(total=total_chunks, desc="Translating", unit="chunk")
     
-    # 进度回调：仅更新 tqdm 进度条
-    def _update_progress(chunk_idx: int, pct: int):
+    # 使用列表作为可变容器跟踪已完成 chunk 数
+    progress_data = [0]
+    
+    # 进度回调：更新 tqdm 进度条并显示百分比
+    async def _update_progress(chunk_idx: int, pct: int):
+        progress_data[0] += 1
         pbar.update(1)
+        pbar.set_description(f"Translating ({pct}%)")
     
     # 创建管道并执行翻译
     pipeline = TranslationPipeline(config)
@@ -169,6 +190,8 @@ async def main_async(args: argparse.Namespace) -> int:
         progress=progress,
         on_progress=_update_progress,
         progress_path=progress_path,  # 传入进度文件路径，由 pipeline 自动增量保存
+        summary_prompt=args.summary_prompt,
+        translation_prompt=args.translation_prompt,
     )
     
     pbar.close()

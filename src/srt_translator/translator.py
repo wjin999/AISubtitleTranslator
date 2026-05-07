@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Mapping
 from dataclasses import dataclass
 
 from openai import AsyncOpenAI
@@ -26,6 +26,15 @@ class TranslationResult:
     translated: str
     success: bool
     error: str = ""
+
+
+# 共享的字幕翻译规范（批量和单条重试共用）
+_SHARED_SUBTITLE_RULES = """## 字幕标点规范（必须严格遵守）：
+8. 句末不加句号（。）：无论是陈述句还是祈使句，字幕结尾一律不写句号（。）。字幕的出现和消失本身就起到了断句的作用。
+9. 必须保留问号（？）和叹号（！）：用于准确传达疑问或强烈语气。
+10. 句中停顿用空格代替逗号（，）：句子内部的停顿使用空格（半角或全角均可），不使用逗号或顿号。
+11. 省略号（……）和破折号（——）：表示话语未说完、被打断或声音拖长时规范使用。
+12. 引号（""）和括号（（））：专有名词、画外音或内心独白时正常使用。"""
 
 
 async def generate_context_summary(
@@ -112,7 +121,7 @@ def _build_translation_prompt(
     global_summary: str,
     matched_terms: List[str],
     custom_prompt: str | None = None,
-    translation_memory: Dict[str, str] | None = None,
+    translation_memory: Mapping[str, str] | None = None,
 ) -> tuple[str, str]:
     """Build translation prompts.
 
@@ -130,10 +139,10 @@ def _build_translation_prompt(
     if custom_prompt:
         system_prompt = custom_prompt
     else:
-        system_prompt = """你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。
+        system_prompt = f"""你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。
 
 ## 核心要求：
-1. 输出合法 JSON 格式：{"translations": [{"id": 0, "text": "翻译"}, ...]}
+1. 输出合法 JSON 格式：{{"translations": [{{"id": 0, "text": "翻译"}}, ...]}}
 2. 输出的条目数量必须与输入完全一致
 3. 每条译文必须简洁（中文约 3-5 字符对应一秒屏幕时间）
 
@@ -143,15 +152,10 @@ def _build_translation_prompt(
 6. 保持角色语气在全篇字幕中一致
 7. 遇到习语、双关语或文化特定内容时，采用意译而非直译
 
-## 字幕标点规范（必须严格遵守）：
-8. 句末不加句号（。）：无论是陈述句还是祈使句，字幕结尾一律不写句号（。）。字幕的出现和消失本身就起到了断句的作用。
-9. 必须保留问号（？）和叹号（！）：用于准确传达疑问或强烈语气。
-10. 句中停顿用空格代替逗号（，）：句子内部的停顿使用空格（半角或全角均可），不使用逗号或顿号。
-11. 省略号（……）和破折号（——）：表示话语未说完、被打断或声音拖长时规范使用。
-12. 引号（""）和括号（（））：专有名词、画外音或内心独白时正常使用。
+{_SHARED_SUBTITLE_RULES}
 
 ## JSON 格式示例：
-{"translations": [{"id": 0, "text": "你好"}, {"id": 1, "text": "世界"}]}"""
+{{"translations": [{{"id": 0, "text": "你好"}}, {{"id": 1, "text": "世界"}}]}}"""
     
     glossary_section = ""
     if matched_terms:
@@ -162,7 +166,7 @@ def _build_translation_prompt(
     memory_section = ""
     if translation_memory:
         # Pick up to 5 representative entries from memory
-        memory_items = list(translation_memory.items())[:5]
+        memory_items = list(translation_memory.items())[-5:]
         memory_lines = "\n".join(
             [f"  {orig} -> {trans}" for orig, trans in memory_items]
         )
@@ -276,13 +280,11 @@ async def _translate_single_retry(
     terms = [f"{k} -> {v}" for k, v in matched.items()]
     
     system_prompt = (
-        "你是一名专业的字幕翻译。"
-        "将英文字幕翻译成简体中文。"
-        "只输出中文翻译，不要任何解释。"
-        "严格遵守字幕标点规范：句末不加句号（。），"
-        "保留问号（？）和叹号（！），"
-        "句中停顿用空格代替逗号。"
-        "保持简洁，适合字幕使用。"
+        "你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。\n"
+        "只输出中文翻译，不要任何解释。\n"
+        "保持简洁（中文约 3-5 字符对应一秒屏幕时间），使用自然、口语化的中文。\n"
+        "保留说话者的语气和情感，遇到习语/双关语时采用意译。\n\n"
+        f"{_SHARED_SUBTITLE_RULES}"
     )
     
     glossary_hint = f" 术语：{', '.join(terms)}" if terms else ""
@@ -301,6 +303,9 @@ async def _translate_single_retry(
     context_str = "\n".join(context_lines)
     if context_str:
         context_str += "\n"
+    
+    if glossary_hint:
+        context_str += glossary_hint + "\n"
     
     user_prompt = f"""{context_str}请翻译以下句子：
 {original}"""
@@ -330,7 +335,7 @@ async def translate_chunk_task(
     sem: asyncio.Semaphore,
     retry_failed: bool = True,
     custom_translation_prompt: str | None = None,
-    translation_memory: Dict[str, str] | None = None,
+    translation_memory: Mapping[str, str] | None = None,
 ) -> List[TranslationResult]:
     """
     Translate a chunk of subtitle entries.
@@ -367,7 +372,8 @@ async def translate_chunk_task(
             ],
             temperature=0.3,
             max_retries=3,
-            json_mode=True
+            json_mode=True,
+            max_tokens=4096,
         )
         
         translated_map = _parse_translation_response(json_str, len(chunk_data))
@@ -410,45 +416,31 @@ async def translate_chunk_task(
                     error="Missing from response"
                 ))
         
-        # 单条重试失败的项（带上下文）
+        # 并行重试失败的项（带上下文）
         if retry_failed and failed_indices:
             logger.info(f"Retrying {len(failed_indices)} failed items individually...")
-            
-            for i in failed_indices:
+
+            async def _retry_one(i: int) -> tuple[int, str]:
                 original = chunk_data[i]['text']
                 retried = await _translate_single_retry(
                     client, model, original, global_summary, glossary,
                     context_prev=context_prev,
                     context_next=context_next,
                 )
-                
+                return i, retried
+
+            retry_results = await asyncio.gather(*[_retry_one(i) for i in failed_indices])
+
+            for i, retried in retry_results:
                 if retried:
-                    is_valid, _ = validate_translation(original, retried)
+                    is_valid, _ = validate_translation(chunk_data[i]['text'], retried)
                     if is_valid:
                         results[i] = TranslationResult(
                             index=chunk_data[i]['index'],
-                            original=original,
+                            original=chunk_data[i]['text'],
                             translated=retried,
-                            success=True
+                            success=True,
                         )
                         logger.debug(f"Retry succeeded for #{i}")
         
         return results
-
-
-def extract_translations(results: List[TranslationResult]) -> List[str]:
-    """
-    从 TranslationResult 列表中提取翻译文本。
-    
-    对于失败的项，返回原文（而非错误标记）。
-    """
-    translations: List[str] = []
-    
-    for r in results:
-        if r.success and r.translated:
-            translations.append(r.translated)
-        else:
-            # 失败时返回原文，让用户知道哪些没翻译
-            translations.append(r.original)
-    
-    return translations

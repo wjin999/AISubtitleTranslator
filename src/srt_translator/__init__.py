@@ -16,10 +16,10 @@ from .models import SrtEntry
 from .parser import parse_srt, save_srt, validate_srt_file
 from .merger import merge_entries, merge_entries_batch, init_spacy_model
 from .translator import translate_chunk_task, generate_context_summary, TranslationResult
-from .glossary import load_glossary, Glossary, find_matching_terms
+from .glossary import load_glossary, load_glossary_from_string, Glossary, find_matching_terms
 from .text_utils import clean_translated_text, validate_translation
 from .config import TranslatorConfig
-from .progress import TranslationProgress, save_progress, load_progress, save_progress_incremental
+from .progress import TranslationProgress, load_progress, save_progress_incremental
 from .pipeline import TranslationPipeline
 
 __all__ = [
@@ -44,12 +44,12 @@ __all__ = [
     "TranslationPipeline",
     # Glossary
     "load_glossary",
+    "load_glossary_from_string",
     "find_matching_terms",
     # Utils
     "clean_translated_text",
     "validate_translation",
     # Progress
-    "save_progress",
     "save_progress_incremental",
     "load_progress",
 ]

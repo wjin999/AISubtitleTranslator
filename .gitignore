@@ -7,6 +7,7 @@ env/
 dist/
 build/
 *.spec
+!api-server.spec
 
 # Node.js / Tauri 忽略项
 ui/node_modules/
@@ -15,9 +16,17 @@ ui/src-tauri/target/
 ui/src-tauri/bin/
 
 # 运行产生的数据和敏感配置
+.claude/
+release/
 workspace/
 glossary.txt
 *.srt
 
+# Tauri runtime data
+ui/src-tauri/workspace/
+
 # 构建产物
 *.egg-info/
+
+# 残留的 npm 产物文件
+ui/src-tauri/2
