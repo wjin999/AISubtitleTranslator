@@ -1,7 +1,7 @@
 @echo off
 title AISubtitleTranslator - Build
 
-set APP_VERSION=1.0.0
+set APP_VERSION=1.0.1
 
 echo ============================================
 echo   AISubtitleTranslator Build Script

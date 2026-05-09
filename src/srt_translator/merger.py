@@ -183,20 +183,35 @@ def should_merge(
 def _apply_merge_decisions(
     entries: Sequence[SrtEntry],
     decisions: List[bool],
+    max_chars: int,
+    max_duration_seconds: float | None,
 ) -> List[SrtEntry]:
-    """Apply pre-computed merge decisions to produce merged entry list."""
+    """Apply pre-computed merge decisions to produce merged entry list.
+
+    Pairwise merge decisions can form long chains (A+B, B+C, C+D). Re-check
+    cumulative limits while applying decisions so a translated cue never grows
+    far beyond the configured per-entry bounds.
+    """
     merged: List[SrtEntry] = []
     current = entries[0].copy()
 
     for i in range(1, len(entries)):
-        if decisions[i - 1]:
+        next_entry = entries[i]
+        combined_len = len(current.text) + 1 + len(next_entry.text)
+        combined_duration = next_entry.end_seconds - current.start_seconds
+        within_duration = (
+            max_duration_seconds is None
+            or combined_duration <= max_duration_seconds
+        )
+
+        if decisions[i - 1] and combined_len <= max_chars and within_duration:
             current = current.copy(
-                text=current.text + " " + entries[i].text,
-                end=entries[i].end,
+                text=current.text + " " + next_entry.text,
+                end=next_entry.end,
             )
         else:
             merged.append(current)
-            current = entries[i].copy()
+            current = next_entry.copy()
 
     merged.append(current)
     return merged
@@ -205,7 +220,8 @@ def _apply_merge_decisions(
 def merge_entries(
     entries: Sequence[SrtEntry],
     max_chars: int = 300,
-    time_gap_threshold: float = 1.5
+    time_gap_threshold: float = 1.5,
+    max_duration_seconds: float | None = 15.0,
 ) -> List[SrtEntry]:
     """
     Merge subtitle entries using intelligent NLP-based logic.
@@ -225,7 +241,12 @@ def merge_entries(
         for i in range(len(entries) - 1)
     ]
 
-    merged = _apply_merge_decisions(entries, decisions)
+    merged = _apply_merge_decisions(
+        entries,
+        decisions,
+        max_chars,
+        max_duration_seconds,
+    )
     logger.info(f"Merged {len(entries)} entries into {len(merged)} entries")
     return merged
 
@@ -234,7 +255,8 @@ def merge_entries_batch(
     entries: Sequence[SrtEntry],
     max_chars: int = 300,
     time_gap_threshold: float = 1.5,
-    batch_size: int = 100
+    batch_size: int = 100,
+    max_duration_seconds: float | None = 15.0,
 ) -> List[SrtEntry]:
     """
     Batch-optimized version of merge_entries.
@@ -252,7 +274,12 @@ def merge_entries_batch(
     
     # 对于小数据集，使用普通方法
     if len(entries) < batch_size:
-        return merge_entries(entries, max_chars, time_gap_threshold)
+        return merge_entries(
+            entries,
+            max_chars,
+            time_gap_threshold,
+            max_duration_seconds,
+        )
     
     # 预计算所有相邻对的合并文本
     pairs_to_check: List[tuple[int, str]] = []
@@ -299,7 +326,12 @@ def merge_entries_batch(
     
     # 执行合并
     decisions = [(i in should_merge_set) for i in range(len(entries) - 1)]
-    merged = _apply_merge_decisions(entries, decisions)
+    merged = _apply_merge_decisions(
+        entries,
+        decisions,
+        max_chars,
+        max_duration_seconds,
+    )
 
     logger.info(f"Batch merged {len(entries)} entries into {len(merged)} entries")
     return merged
@@ -321,11 +353,12 @@ async def merge_entries_batch_async(
     max_chars: int = 300,
     time_gap_threshold: float = 1.5,
     batch_size: int = 100,
+    max_duration_seconds: float | None = 15.0,
 ) -> List[SrtEntry]:
     """Async-safe version of merge_entries_batch."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _merge_executor,
         merge_entries_batch,
-        entries, max_chars, time_gap_threshold, batch_size,
+        entries, max_chars, time_gap_threshold, batch_size, max_duration_seconds,
     )

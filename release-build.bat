@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 title AISubtitleTranslator - Release Build
 
-set APP_VERSION=1.0.0
+set APP_VERSION=1.0.1
 set RELEASE_DIR=release\%APP_VERSION%
 
 echo ============================================
@@ -58,6 +58,10 @@ echo       OK.
 
 REM === 5. Build Tauri desktop app ===
 echo [5/6] Building Tauri desktop app (this may take 3-10 min)...
+set BUNDLE_DIR=ui\src-tauri\target\release\bundle
+if exist "%BUNDLE_DIR%\msi\*.msi" del /q "%BUNDLE_DIR%\msi\*.msi" >nul 2>&1
+if exist "%BUNDLE_DIR%\nsis\*.exe" del /q "%BUNDLE_DIR%\nsis\*.exe" >nul 2>&1
+if exist "%BUNDLE_DIR%\dmg\*.dmg" del /q "%BUNDLE_DIR%\dmg\*.dmg" >nul 2>&1
 cd ui
 call npm run tauri build
 set BUILD_RESULT=%errorlevel%
@@ -70,25 +74,24 @@ echo [6/6] Collecting release artifacts...
 if exist "%RELEASE_DIR%" rmdir /s /q "%RELEASE_DIR%" >nul 2>&1
 mkdir "%RELEASE_DIR%" 2>nul
 
-set BUNDLE_DIR=ui\src-tauri\target\release\bundle
 set FOUND=0
 
-if exist "%BUNDLE_DIR%\msi\*.msi" (
-    for %%f in ("%BUNDLE_DIR%\msi\*.msi") do (
+if exist "%BUNDLE_DIR%\msi\*%APP_VERSION%*.msi" (
+    for %%f in ("%BUNDLE_DIR%\msi\*%APP_VERSION%*.msi") do (
         copy "%%f" "%RELEASE_DIR%\" >nul 2>&1
         echo       + %%~nxf
         set FOUND=1
     )
 )
-if exist "%BUNDLE_DIR%\nsis\*.exe" (
-    for %%f in ("%BUNDLE_DIR%\nsis\*.exe") do (
+if exist "%BUNDLE_DIR%\nsis\*%APP_VERSION%*.exe" (
+    for %%f in ("%BUNDLE_DIR%\nsis\*%APP_VERSION%*.exe") do (
         copy "%%f" "%RELEASE_DIR%\" >nul 2>&1
         echo       + %%~nxf
         set FOUND=1
     )
 )
-if exist "%BUNDLE_DIR%\dmg\*.dmg" (
-    for %%f in ("%BUNDLE_DIR%\dmg\*.dmg") do (
+if exist "%BUNDLE_DIR%\dmg\*%APP_VERSION%*.dmg" (
+    for %%f in ("%BUNDLE_DIR%\dmg\*%APP_VERSION%*.dmg") do (
         copy "%%f" "%RELEASE_DIR%\" >nul 2>&1
         echo       + %%~nxf
         set FOUND=1

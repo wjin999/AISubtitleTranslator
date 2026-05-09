@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-app = FastAPI(title="AISubtitleTranslator API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="AISubtitleTranslator API", version="1.0.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "srt-translator"
-version = "1.0.0"
+version = "1.0.1"
 description = "基于 LLM 的异步字幕翻译工具 / Async LLM-powered subtitle translator"
 readme = "README.md"
 license = {text = "MIT"}

@@ -8,7 +8,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set APP_VERSION=1.0.0
+set APP_VERSION=1.0.1
 set TAG_NAME=v%APP_VERSION%
 set RELEASE_DIR=release\%APP_VERSION%
 
@@ -105,10 +105,10 @@ echo ------ Create GitHub Release ------
 
 REM Check if installers exist
 set HAS_ASSETS=0
-if exist "%RELEASE_DIR%\*.msi" set HAS_ASSETS=1
-if exist "%RELEASE_DIR%\*.exe" set HAS_ASSETS=1
+if exist "%RELEASE_DIR%\*%APP_VERSION%*.msi" set HAS_ASSETS=1
+if exist "%RELEASE_DIR%\*%APP_VERSION%*.exe" set HAS_ASSETS=1
 if %HAS_ASSETS% equ 0 (
-    echo [ERROR] No installer packages found in %RELEASE_DIR%.
+    echo [ERROR] No installer packages for v%APP_VERSION% found in %RELEASE_DIR%.
     echo Run release-build.bat before publishing.
     pause
     exit /b 1
@@ -117,6 +117,10 @@ if %HAS_ASSETS% equ 0 (
 set "RELEASE_NOTES_FILE=%TEMP%\AISubtitleTranslator-release-notes-%APP_VERSION%.md"
 (
     echo ## AISubtitleTranslator v%APP_VERSION%
+    echo.
+    echo ### Fixed
+    echo - Fixed smart subtitle merging creating excessively long subtitle blocks when multiple spaCy pairwise merge decisions chained together.
+    echo - Added cumulative merge guards for translated subtitle block length and display duration.
     echo.
     echo ### Build
     echo - Windows: .msi / .exe installer
@@ -127,7 +131,7 @@ echo Creating release with installer packages...
 gh release create "%TAG_NAME%" ^
     --title "AISubtitleTranslator v%APP_VERSION%" ^
     --notes-file "%RELEASE_NOTES_FILE%" ^
-    "%RELEASE_DIR%\*"
+    "%RELEASE_DIR%\*%APP_VERSION%*"
 
 if not errorlevel 1 (
     echo.

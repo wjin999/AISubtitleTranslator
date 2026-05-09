@@ -9,7 +9,7 @@ Features:
 - Progress saving and resume support
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "wjin999"
 
 from .models import SrtEntry

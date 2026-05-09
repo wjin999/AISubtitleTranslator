@@ -2,6 +2,7 @@
 
 import pytest
 from srt_translator.models import SrtEntry
+import srt_translator.merger as merger
 from srt_translator.merger import should_merge, merge_entries, init_spacy_model
 
 try:
@@ -76,3 +77,30 @@ class TestMergeEntries:
         original_text = entries[0].text
         merge_entries(entries)
         assert entries[0].text == original_text  # 未被修改
+
+    def test_chained_merges_respect_cumulative_max_chars(self, monkeypatch):
+        """连续相邻项可合并时，最终块仍不能超过 max_chars。"""
+        monkeypatch.setattr(merger, "should_merge", lambda *args: True)
+        entries = [
+            SrtEntry(1, "00:00:01,000", "00:00:02,000", "aaaaa"),
+            SrtEntry(2, "00:00:02,100", "00:00:03,000", "bbbbb"),
+            SrtEntry(3, "00:00:03,100", "00:00:04,000", "ccccc"),
+            SrtEntry(4, "00:00:04,100", "00:00:05,000", "ddddd"),
+        ]
+
+        merged = merge_entries(entries, max_chars=11, max_duration_seconds=None)
+
+        assert [entry.text for entry in merged] == ["aaaaa bbbbb", "ccccc ddddd"]
+
+    def test_chained_merges_respect_cumulative_duration(self, monkeypatch):
+        """连续合并不能产生过长显示时间的字幕块。"""
+        monkeypatch.setattr(merger, "should_merge", lambda *args: True)
+        entries = [
+            SrtEntry(1, "00:00:01,000", "00:00:02,000", "one"),
+            SrtEntry(2, "00:00:02,100", "00:00:03,000", "two"),
+            SrtEntry(3, "00:00:03,100", "00:00:04,000", "three"),
+        ]
+
+        merged = merge_entries(entries, max_chars=300, max_duration_seconds=2.2)
+
+        assert [entry.text for entry in merged] == ["one two", "three"]
