@@ -6,6 +6,7 @@ import asyncio
 import logging
 import sys
 import os
+import importlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Sequence, Optional, TYPE_CHECKING
 
@@ -17,14 +18,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Global NLP model instance
+_nlp_models: dict[str, "spacy.Language"] = {}
 _nlp_model: Optional["spacy.Language"] = None
 _merge_executor = ThreadPoolExecutor(max_workers=1)
 
+LANGUAGE_MODEL_MAP = {
+    "en": "en_core_web_sm",
+    "ja": "ja_core_news_sm",
+    "ko": "ko_core_news_sm",
+}
 
-def _resolve_spacy_model_path() -> str | None:
-    """Resolve en_core_web_sm model data path for PyInstaller bundles.
 
-    In a PyInstaller bundle, 'import en_core_web_sm' imports the frozen
+def _resolve_spacy_model_path(model_package: str) -> str | None:
+    """Resolve a spaCy model data path for PyInstaller bundles.
+
+    In a PyInstaller bundle, importing the model package imports the frozen
     module from the PYZ archive -- its __file__ is not a real filesystem
     path. The actual model data files are extracted to sys._MEIPASS via
     the 'datas' directive in the spec file. We must check MEIPASS first.
@@ -34,14 +42,14 @@ def _resolve_spacy_model_path() -> str | None:
     # 1. PyInstaller: look in MEIPASS where 'datas' are extracted
     if frozen:
         bundle = sys._MEIPASS  # type: ignore[attr-defined]
-        pkg_dir = os.path.join(bundle, 'en_core_web_sm')
+        pkg_dir = os.path.join(bundle, model_package)
         if not os.path.isdir(pkg_dir):
             return None
     else:
         # 2. Normal pip-installed environment
         try:
-            import en_core_web_sm
-            pkg_dir = os.path.dirname(en_core_web_sm.__file__)
+            model_module = importlib.import_module(model_package)
+            pkg_dir = os.path.dirname(model_module.__file__)
         except ImportError:
             return None
 
@@ -54,7 +62,7 @@ def _resolve_spacy_model_path() -> str | None:
     return None
 
 
-def init_spacy_model() -> None:
+def init_spacy_model(source_language: str = "en") -> None:
     """
     Initialize the spaCy NLP model.
 
@@ -64,7 +72,15 @@ def init_spacy_model() -> None:
     """
     global _nlp_model
 
-    if _nlp_model is not None:
+    model_package = LANGUAGE_MODEL_MAP.get(source_language)
+    if model_package is None:
+        raise ValueError(
+            f"Unsupported source language '{source_language}'. "
+            "Supported languages: en, ja, ko."
+        )
+
+    if source_language in _nlp_models:
+        _nlp_model = _nlp_models[source_language]
         return
 
     try:
@@ -79,9 +95,9 @@ def init_spacy_model() -> None:
             "spaCy is required. Install it with 'pip install spacy'."
         )
 
-    logger.info("Initializing spaCy NLP model...")
+    logger.info(f"Initializing spaCy NLP model for {source_language}: {model_package}...")
 
-    model_path = _resolve_spacy_model_path()
+    model_path = _resolve_spacy_model_path(model_package)
     if model_path:
         logger.debug(f"Loading spaCy model from: {model_path}")
         try:
@@ -89,6 +105,7 @@ def init_spacy_model() -> None:
                 model_path,
                 disable=["ner", "lemmatizer"]
             )
+            _nlp_models[source_language] = _nlp_model
             logger.info("spaCy model loaded from bundled path")
             return
         except Exception as e:
@@ -102,17 +119,18 @@ def init_spacy_model() -> None:
     if not getattr(sys, 'frozen', False):
         try:
             _nlp_model = spacy.load(
-                "en_core_web_sm",
+                model_package,
                 disable=["ner", "lemmatizer"]
             )
+            _nlp_models[source_language] = _nlp_model
             logger.info("spaCy model loaded from pip install")
             return
         except OSError:
             pass
 
     raise OSError(
-        "spaCy model 'en_core_web_sm' not found.\n"
-        "Install: python -m spacy download en_core_web_sm"
+        f"spaCy model '{model_package}' not found.\n"
+        f"Install: python -m spacy download {model_package}"
     )
 
 
@@ -151,11 +169,14 @@ def should_merge(
     cur_entry: SrtEntry, 
     next_entry: SrtEntry, 
     max_chars: int,
-    time_gap_threshold: float
+    time_gap_threshold: float,
+    source_language: str = "en",
 ) -> bool:
     """
     Determine if two subtitle entries should be merged.
     """
+    global _nlp_model
+
     cur_text = cur_entry.text
     next_text = next_entry.text
     
@@ -175,6 +196,11 @@ def should_merge(
     # 如果当前字幕以句号等结尾，不合并
     if cur_text.rstrip()[-1:] in '.!?。！？':
         return False
+
+    if source_language not in _nlp_models:
+        init_spacy_model(source_language)
+    else:
+        _nlp_model = _nlp_models[source_language]
 
     # NLP 句子边界检测
     return _check_sentence_boundary(cur_text, next_text)
@@ -222,6 +248,7 @@ def merge_entries(
     max_chars: int = 300,
     time_gap_threshold: float = 1.5,
     max_duration_seconds: float | None = 15.0,
+    source_language: str = "en",
 ) -> List[SrtEntry]:
     """
     Merge subtitle entries using intelligent NLP-based logic.
@@ -237,7 +264,13 @@ def merge_entries(
         return [entries[0].copy()]
 
     decisions = [
-        should_merge(entries[i], entries[i + 1], max_chars, time_gap_threshold)
+        should_merge(
+            entries[i],
+            entries[i + 1],
+            max_chars,
+            time_gap_threshold,
+            source_language,
+        )
         for i in range(len(entries) - 1)
     ]
 
@@ -257,6 +290,7 @@ def merge_entries_batch(
     time_gap_threshold: float = 1.5,
     batch_size: int = 100,
     max_duration_seconds: float | None = 15.0,
+    source_language: str = "en",
 ) -> List[SrtEntry]:
     """
     Batch-optimized version of merge_entries.
@@ -269,8 +303,10 @@ def merge_entries_batch(
     if not entries:
         return []
     
-    if _nlp_model is None:
-        raise RuntimeError("spaCy model not initialized")
+    if source_language not in _nlp_models:
+        init_spacy_model(source_language)
+    else:
+        _nlp_model = _nlp_models[source_language]
     
     # 对于小数据集，使用普通方法
     if len(entries) < batch_size:
@@ -279,6 +315,7 @@ def merge_entries_batch(
             max_chars,
             time_gap_threshold,
             max_duration_seconds,
+            source_language,
         )
     
     # 预计算所有相邻对的合并文本
@@ -348,17 +385,29 @@ async def init_spacy_model_async() -> None:
     await loop.run_in_executor(_merge_executor, init_spacy_model)
 
 
+async def init_spacy_model_for_language_async(source_language: str = "en") -> None:
+    """Async-safe spaCy model loading for a specific source language."""
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(_merge_executor, init_spacy_model, source_language)
+
+
 async def merge_entries_batch_async(
     entries: Sequence[SrtEntry],
     max_chars: int = 300,
     time_gap_threshold: float = 1.5,
     batch_size: int = 100,
     max_duration_seconds: float | None = 15.0,
+    source_language: str = "en",
 ) -> List[SrtEntry]:
     """Async-safe version of merge_entries_batch."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _merge_executor,
         merge_entries_batch,
-        entries, max_chars, time_gap_threshold, batch_size, max_duration_seconds,
+        entries,
+        max_chars,
+        time_gap_threshold,
+        batch_size,
+        max_duration_seconds,
+        source_language,
     )

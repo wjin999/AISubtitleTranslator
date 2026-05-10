@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 title AISubtitleTranslator - Release Build
 
-set APP_VERSION=1.0.1
+set APP_VERSION=1.0.2
 set RELEASE_DIR=release\%APP_VERSION%
 
 echo ============================================
@@ -23,6 +23,10 @@ pip install -e .[server] pyinstaller >nul 2>&1
 if %errorlevel% neq 0 goto :err_pip
 echo       Installing spaCy model (core feature)...
 python -m spacy download en_core_web_sm
+if %errorlevel% neq 0 goto :err_spacy
+python -m spacy download ja_core_news_sm
+if %errorlevel% neq 0 goto :err_spacy
+python -m spacy download ko_core_news_sm
 if %errorlevel% neq 0 goto :err_spacy
 echo       OK.
 

@@ -139,7 +139,7 @@ def _build_translation_prompt(
     if custom_prompt:
         system_prompt = custom_prompt
     else:
-        system_prompt = f"""你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。
+        system_prompt = f"""你是一名专业的影视字幕翻译专家，负责将字幕翻译成简体中文。
 
 ## 核心要求：
 1. 输出合法 JSON 格式：{{"translations": [{{"id": 0, "text": "翻译"}}, ...]}}
@@ -280,7 +280,7 @@ async def _translate_single_retry(
     terms = [f"{k} -> {v}" for k, v in matched.items()]
     
     system_prompt = (
-        "你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。\n"
+        "你是一名专业的影视字幕翻译专家，负责将字幕翻译成简体中文。\n"
         "只输出中文翻译，不要任何解释。\n"
         "保持简洁（中文约 3-5 字符对应一秒屏幕时间），使用自然、口语化的中文。\n"
         "保留说话者的语气和情感，遇到习语/双关语时采用意译。\n\n"

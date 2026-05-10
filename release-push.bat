@@ -8,7 +8,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set APP_VERSION=1.0.1
+set APP_VERSION=1.0.2
 set TAG_NAME=v%APP_VERSION%
 set RELEASE_DIR=release\%APP_VERSION%
 
@@ -117,6 +117,11 @@ if %HAS_ASSETS% equ 0 (
 set "RELEASE_NOTES_FILE=%TEMP%\AISubtitleTranslator-release-notes-%APP_VERSION%.md"
 (
     echo ## AISubtitleTranslator v%APP_VERSION%
+    echo.
+    echo ### Added
+    echo - Added source language selection for English, Japanese, and Korean spaCy smart merging.
+    echo - Added a no-merge option for translating subtitles one entry at a time.
+    echo - Bundled English, Japanese, and Korean spaCy models in release builds.
     echo.
     echo ### Fixed
     echo - Fixed smart subtitle merging creating excessively long subtitle blocks when multiple spaCy pairwise merge decisions chained together.

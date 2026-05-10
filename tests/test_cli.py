@@ -23,6 +23,7 @@ class TestParseArguments:
         assert args.glossary_path is None
         assert args.max_chars_per_entry == 300
         assert args.no_merge is False
+        assert args.source_language == "en"
         assert args.api_key is None
         assert args.base_url == "https://api.deepseek.com"
         assert args.model_name is None
@@ -35,6 +36,7 @@ class TestParseArguments:
             "srt-translator", "input.srt", "output.srt",
             "-g", "glossary.txt",
             "--no-merge",
+            "--source-language", "ja",
             "--max-chars", "200",
             "--merge-gap", "2.0",
             "--api-key", "test-key",
@@ -54,6 +56,7 @@ class TestParseArguments:
         assert args.glossary_path == "glossary.txt"
         assert args.max_chars_per_entry == 200
         assert args.no_merge is True
+        assert args.source_language == "ja"
         assert args.merge_time_gap == 2.0
         assert args.api_key == "test-key"
         assert args.base_url == "https://custom.api.com"

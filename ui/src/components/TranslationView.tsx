@@ -30,6 +30,8 @@ interface Props {
   savePath: string;
   glossary: string;
   concurrency: number;
+  sourceLanguage: string;
+  mergeEnabled: boolean;
 }
 
 export default function TranslationView(props: Props) {
@@ -38,6 +40,7 @@ export default function TranslationView(props: Props) {
     status, setStatus, isError, setIsError, logs, setLogs,
     apiKey, url, sumModel, transModel,
     sumPrompt, transPrompt, savePath, glossary, concurrency,
+    sourceLanguage, mergeEnabled,
   } = props;
 
   const logsContainerRef = useRef<HTMLDivElement>(null);
@@ -114,6 +117,8 @@ export default function TranslationView(props: Props) {
     form.append("save_path", savePath);
     form.append("glossary", glossary);
     form.append("concurrency", String(concurrency));
+    form.append("source_language", sourceLanguage);
+    form.append("merge_enabled", String(mergeEnabled));
 
     try {
       const res = await fetch(`${BACKEND_BASE}/api/translate`, { method: "POST", body: form });

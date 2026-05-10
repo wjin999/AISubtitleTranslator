@@ -66,6 +66,12 @@ Examples:
     # Processing options
     parser.add_argument("-o", "--output", dest="output_path", help="Output SRT file path")
     parser.add_argument("--no-merge", action="store_true", help="Disable spaCy smart merging")
+    parser.add_argument(
+        "--source-language",
+        choices=["en", "ja", "ko"],
+        default="en",
+        help="Source subtitle language for smart merging: en, ja, ko",
+    )
     parser.add_argument("--max-chars", dest="max_chars_per_entry", type=int, default=300)
     parser.add_argument("--merge-gap", dest="merge_time_gap", type=float, default=1.5)
     
@@ -143,11 +149,12 @@ async def main_async(args: argparse.Namespace) -> int:
         logger.info("Smart merging disabled")
         merged_entries = [entry.copy() for entry in entries]
     else:
-        init_spacy_model()
+        init_spacy_model(config.source_language)
         merged_entries = merge_entries_batch(
             entries,
             config.max_chars_per_entry,
-            config.merge_time_gap
+            config.merge_time_gap,
+            source_language=config.source_language,
         )
     
     # 进度管理

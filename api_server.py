@@ -21,7 +21,7 @@ if _src_path not in sys.path:
 from srt_translator.config import TranslatorConfig
 from srt_translator.parser import parse_srt, save_srt
 from srt_translator.merger import (
-    init_spacy_model_async,
+    init_spacy_model_for_language_async,
     merge_entries_batch_async,
 )
 from srt_translator.glossary import load_glossary_from_string
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-app = FastAPI(title="AISubtitleTranslator API", version="1.0.1", lifespan=lifespan)
+app = FastAPI(title="AISubtitleTranslator API", version="1.0.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,7 +128,8 @@ async def process_translation_job(
     config: TranslatorConfig,
     summary_prompt: Optional[str] = None,
     translation_prompt: Optional[str] = None,
-    glossary_text: str = ""
+    glossary_text: str = "",
+    merge_enabled: bool = True,
 ):
     def _check_cancelled():
         """Raise CancelledError if this job has been cancelled via the API."""
@@ -149,22 +150,34 @@ async def process_translation_job(
         JOB_STATE[job_id]["progress_pct"] = 5
         _check_cancelled()
         
-        log_msg(job_id, "正在智能合并短句（spaCy NLP）...")
-        try:
-            await asyncio.wait_for(init_spacy_model_async(), timeout=30.0)
-            _check_cancelled()
-            merged_entries = await asyncio.wait_for(
-                merge_entries_batch_async(entries, config.max_chars_per_entry, config.merge_time_gap),
-                timeout=60.0
-            )
-            log_msg(job_id, f"句子合并完成，共计 {len(merged_entries)} 个翻译块。")
-        except asyncio.TimeoutError:
-            log_msg(job_id, "智能合并超时，已跳过该步骤。", is_error=True)
-            merged_entries = [e.copy() for e in entries]
-        except asyncio.CancelledError:
-            raise
-        except Exception as merge_err:
-            log_msg(job_id, f"智能合并失败: {merge_err}，已跳过该步骤。", is_error=True)
+        if merge_enabled:
+            log_msg(job_id, f"正在智能合并短句（spaCy NLP，源语言: {config.source_language}）...")
+            try:
+                await asyncio.wait_for(
+                    init_spacy_model_for_language_async(config.source_language),
+                    timeout=30.0,
+                )
+                _check_cancelled()
+                merged_entries = await asyncio.wait_for(
+                    merge_entries_batch_async(
+                        entries,
+                        config.max_chars_per_entry,
+                        config.merge_time_gap,
+                        source_language=config.source_language,
+                    ),
+                    timeout=60.0,
+                )
+                log_msg(job_id, f"句子合并完成，共计 {len(merged_entries)} 个翻译块。")
+            except asyncio.TimeoutError:
+                log_msg(job_id, "智能合并超时，已跳过该步骤。", is_error=True)
+                merged_entries = [e.copy() for e in entries]
+            except asyncio.CancelledError:
+                raise
+            except Exception as merge_err:
+                log_msg(job_id, f"智能合并失败: {merge_err}，已跳过该步骤。", is_error=True)
+                merged_entries = [e.copy() for e in entries]
+        else:
+            log_msg(job_id, "已关闭字幕合并，将逐条翻译。")
             merged_entries = [e.copy() for e in entries]
         
         _check_cancelled()
@@ -253,7 +266,9 @@ async def translate_endpoint(
     translation_prompt: str = Form(None),
     glossary: str = Form(""),
     save_path: str = Form(""),
-    concurrency: int = Form(8)
+    concurrency: int = Form(8),
+    source_language: str = Form("en"),
+    merge_enabled: bool = Form(True),
 ):
     # 使用锁保护并发检查，避免竞态条件
     async with _concurrency_lock:
@@ -297,7 +312,8 @@ async def translate_endpoint(
     config = TranslatorConfig(
         api_key=api_key or os.environ.get("DEEPSEEK_API_KEY"),
         base_url=base_url, summary_model_name=summary_model_name,
-        model_name=model_name, concurrency=concurrency
+        model_name=model_name, concurrency=concurrency,
+        source_language=source_language,
     )
     
     JOB_STATE[job_id] = {
@@ -322,7 +338,16 @@ async def translate_endpoint(
 
     # 使用 asyncio.create_task 创建可取消的任务，并保存引用
     task = asyncio.create_task(
-        process_translation_job(job_id, input_path, output_path, config, summary_prompt, translation_prompt, glossary)
+        process_translation_job(
+            job_id,
+            input_path,
+            output_path,
+            config,
+            summary_prompt,
+            translation_prompt,
+            glossary,
+            merge_enabled,
+        )
     )
     JOB_TASKS[job_id] = task
     

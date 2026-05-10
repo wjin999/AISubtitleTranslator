@@ -142,11 +142,19 @@ body {
 
 .field-group { display: flex; flex-direction: column; gap: 6px; }
 .field-group label { font-size: 12px; /* 放大 */ color: var(--ti8-gold); letter-spacing: 1px; }
-.field-group input {
+.field-group input,
+.field-group select {
   background: #000; border: 1px solid #222; color: var(--ti8-green);
   padding: 12px; font-size: 14px; /* 放大 */ font-family: inherit; outline: none;
 }
-.field-group input:focus { border-color: var(--ti8-green); }
+.field-group input:focus,
+.field-group select:focus { border-color: var(--ti8-green); }
+.checkbox-field { gap: 8px; }
+.checkbox-row {
+  display: flex; align-items: center; gap: 10px; color: var(--ti8-green) !important;
+  font-size: 13px !important; letter-spacing: 0 !important;
+}
+.checkbox-row input { width: 16px; height: 16px; padding: 0; accent-color: var(--ti8-green); }
 
 .ti8-prompt-btn {
   background: #000; border: 1px solid var(--ti8-green);

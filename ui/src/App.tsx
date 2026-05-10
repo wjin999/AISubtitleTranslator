@@ -48,6 +48,8 @@ function App() {
             sumPrompt={settings.sumPrompt} transPrompt={settings.transPrompt}
             savePath={settings.savePath} glossary={settings.glossary}
             concurrency={settings.concurrency}
+            sourceLanguage={settings.sourceLanguage}
+            mergeEnabled={settings.mergeEnabled}
           />
         ) : (
           <SettingsPanel
@@ -57,6 +59,8 @@ function App() {
             transModel={settings.transModel} setTransModel={settings.setTransModel}
             savePath={settings.savePath} setSavePath={settings.setSavePath}
             concurrency={settings.concurrency} setConcurrency={settings.setConcurrency}
+            sourceLanguage={settings.sourceLanguage} setSourceLanguage={settings.setSourceLanguage}
+            mergeEnabled={settings.mergeEnabled} setMergeEnabled={settings.setMergeEnabled}
             setActiveModal={setActiveModal}
             resetToDefaults={settings.resetToDefaults}
           />

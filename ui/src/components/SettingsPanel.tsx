@@ -7,6 +7,8 @@ interface Props {
   transModel: string; setTransModel: (v: string) => void;
   savePath: string; setSavePath: (v: string) => void;
   concurrency: number; setConcurrency: (v: number) => void;
+  sourceLanguage: string; setSourceLanguage: (v: string) => void;
+  mergeEnabled: boolean; setMergeEnabled: (v: boolean) => void;
   setActiveModal: (m: ModalType) => void;
   resetToDefaults: () => void;
 }
@@ -16,6 +18,7 @@ export default function SettingsPanel(props: Props) {
     apiKey, setApiKey, url, setUrl,
     sumModel, setSumModel, transModel, setTransModel,
     savePath, setSavePath, concurrency, setConcurrency,
+    sourceLanguage, setSourceLanguage, mergeEnabled, setMergeEnabled,
     setActiveModal, resetToDefaults,
   } = props;
 
@@ -40,6 +43,22 @@ export default function SettingsPanel(props: Props) {
         <button className="ti8-prompt-btn" style={{ borderColor: '#d4af37', color: '#d4af37' }} onClick={() => setActiveModal("glossary")}>
           [ 编辑术语表 ]
         </button>
+      </div>
+      <div className="ti8-divider" />
+      <div className="field-group">
+        <label>源语言</label>
+        <select value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value)}>
+          <option value="en">英语</option>
+          <option value="ja">日语</option>
+          <option value="ko">韩语</option>
+        </select>
+      </div>
+      <div className="field-group checkbox-field">
+        <label>字幕合并</label>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={mergeEnabled} onChange={(e) => setMergeEnabled(e.target.checked)} />
+          <span>启用 spaCy 智能合并</span>
+        </label>
       </div>
       <div className="ti8-divider" />
       <div className="field-group">

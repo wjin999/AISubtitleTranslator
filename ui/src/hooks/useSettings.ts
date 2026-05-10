@@ -7,7 +7,7 @@ export const DEF_TRANS_MODEL = "deepseek-v4-pro";
 export const _SUM_DEF =
   "你是一名专业的内容分析师。请阅读以下文本，生成一份简洁的背景摘要，内容包括：主要话题、关键术语、角色关系以及整体基调。用中文输出，不超过 150 字。";
 
-export const _TRANS_DEF = `你是一名专业的影视字幕翻译专家，负责将英文字幕翻译成简体中文。
+export const _TRANS_DEF = `你是一名专业的影视字幕翻译专家，负责将字幕翻译成简体中文。
 
 ## 核心要求：
 1. 输出合法 JSON 格式：{"translations": [{"id": 0, "text": "翻译"}, ...]}
@@ -48,6 +48,8 @@ export function useSettings() {
   const [savePath, setSavePath] = useState(() => load("savePath", ""));
   const [glossary, setGlossary] = useState(() => load("glossary", ""));
   const [concurrency, setConcurrency] = useState(() => load("concurrency", 8));
+  const [sourceLanguage, setSourceLanguage] = useState(() => load("sourceLanguage", "en"));
+  const [mergeEnabled, setMergeEnabled] = useState(() => load("mergeEnabled", true));
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,11 +66,13 @@ export function useSettings() {
       localStorage.setItem("savePath", JSON.stringify(savePath));
       localStorage.setItem("glossary", JSON.stringify(glossary));
       localStorage.setItem("concurrency", JSON.stringify(concurrency));
+      localStorage.setItem("sourceLanguage", JSON.stringify(sourceLanguage));
+      localStorage.setItem("mergeEnabled", JSON.stringify(mergeEnabled));
     }, 500);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [apiKey, url, sumModel, transModel, sumPrompt, transPrompt, savePath, glossary, concurrency]);
+  }, [apiKey, url, sumModel, transModel, sumPrompt, transPrompt, savePath, glossary, concurrency, sourceLanguage, mergeEnabled]);
 
   const resetToDefaults = () => {
     setApiKey("");
@@ -80,6 +84,8 @@ export function useSettings() {
     setSavePath("");
     setGlossary("");
     setConcurrency(8);
+    setSourceLanguage("en");
+    setMergeEnabled(true);
   };
 
   return {
@@ -92,6 +98,8 @@ export function useSettings() {
     savePath, setSavePath,
     glossary, setGlossary,
     concurrency, setConcurrency,
+    sourceLanguage, setSourceLanguage,
+    mergeEnabled, setMergeEnabled,
     resetToDefaults,
   };
 }

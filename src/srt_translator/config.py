@@ -30,6 +30,7 @@ class TranslatorConfig:
     concurrency: int = 8
     chunk_size: int = 10
     context_window: int = 7
+    source_language: str = "en"
     
     # Merge settings (spaCy smart merging is always enabled)
     max_chars_per_entry: int = 300
@@ -76,6 +77,7 @@ class TranslatorConfig:
             concurrency=getattr(args, 'concurrency', 8),
             chunk_size=getattr(args, 'chunk_size_for_translation', 10),
             context_window=getattr(args, 'context_window', 7),
+            source_language=getattr(args, 'source_language', "en"),
             max_chars_per_entry=getattr(args, 'max_chars_per_entry', 300),
             merge_time_gap=getattr(args, 'merge_time_gap', 1.5),
         )
@@ -95,6 +97,9 @@ class TranslatorConfig:
         
         if self.chunk_size < 1 or self.chunk_size > 50:
             return f"Chunk size must be 1-50, got {self.chunk_size}"
+
+        if self.source_language not in {"en", "ja", "ko"}:
+            return f"Source language must be one of en, ja, ko; got {self.source_language}"
         
         # Check for deprecated models
         if self.model_name in self.DEPRECATED_MODELS:

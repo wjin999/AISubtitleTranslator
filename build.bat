@@ -1,7 +1,7 @@
 @echo off
 title AISubtitleTranslator - Build
 
-set APP_VERSION=1.0.1
+set APP_VERSION=1.0.2
 
 echo ============================================
 echo   AISubtitleTranslator Build Script
@@ -21,6 +21,10 @@ pip install -e .[server] pyinstaller
 if %errorlevel% neq 0 goto :err_pip
 echo Installing spaCy model (core feature)...
 python -m spacy download en_core_web_sm
+if %errorlevel% neq 0 goto :err_spacy
+python -m spacy download ja_core_news_sm
+if %errorlevel% neq 0 goto :err_spacy
+python -m spacy download ko_core_news_sm
 if %errorlevel% neq 0 goto :err_spacy
 echo OK.
 
