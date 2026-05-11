@@ -42,7 +42,7 @@ _hiddenimports = [
     'srt_translator.config', 'srt_translator.models', 'srt_translator.parser',
     'srt_translator.merger', 'srt_translator.glossary', 'srt_translator.llm_client',
     'srt_translator.pipeline', 'srt_translator.translator', 'srt_translator.text_utils',
-    'srt_translator.progress',
+    'srt_translator.progress', 'srt_translator.quality_checker',
     'spacy', 'spacy.lang.en', 'spacy.lang.ja', 'spacy.lang.ko', 'spacy.cli',
     'en_core_web_sm', 'ja_core_news_sm', 'ko_core_news_sm',
     'sudachipy', 'sudachidict_core', 'natto', 'thinc',

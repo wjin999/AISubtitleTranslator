@@ -8,7 +8,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set APP_VERSION=1.0.2
+set APP_VERSION=1.1.0
 set TAG_NAME=v%APP_VERSION%
 set RELEASE_DIR=release\%APP_VERSION%
 
@@ -119,13 +119,17 @@ set "RELEASE_NOTES_FILE=%TEMP%\AISubtitleTranslator-release-notes-%APP_VERSION%.
     echo ## AISubtitleTranslator v%APP_VERSION%
     echo.
     echo ### Added
-    echo - Added source language selection for English, Japanese, and Korean spaCy smart merging.
-    echo - Added a no-merge option for translating subtitles one entry at a time.
-    echo - Bundled English, Japanese, and Korean spaCy models in release builds.
+    echo - Added automatic timeline-based subtitle quality check after translation, with a settings toggle.
+    echo - Restricted API configuration to DeepSeek only, with no provider or base URL selection.
+    echo - Added an option to save spaCy merged source subtitles.
+    echo - Added max output tokens and request timeout settings for DeepSeek requests.
+    echo.
+    echo ### Removed
+    echo - Removed OpenAI / ChatGPT provider presets and OpenAI API key fallback.
+    echo - Removed temperature and reasoning effort settings from the UI and API request flow.
     echo.
     echo ### Fixed
-    echo - Fixed smart subtitle merging creating excessively long subtitle blocks when multiple spaCy pairwise merge decisions chained together.
-    echo - Added cumulative merge guards for translated subtitle block length and display duration.
+    echo - Improved runtime workspace selection to avoid upload failures when the project workspace directory is not writable.
     echo.
     echo ### Build
     echo - Windows: .msi / .exe installer

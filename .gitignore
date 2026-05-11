@@ -19,6 +19,7 @@ ui/src-tauri/bin/
 .claude/
 release/
 workspace/
+.runtime_workspace/
 glossary.txt
 *.srt
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
 
@@ -22,9 +22,10 @@ class TranslatorConfig:
     
     # API settings
     api_key: Optional[str] = None
-    base_url: str = "https://api.deepseek.com"
     model_name: str = "deepseek-v4-pro"          # 默认模型，可通过 DEEPSEEK_MODEL 环境变量覆盖
     summary_model_name: str = "deepseek-v4-pro"  # 默认摘要模型，可通过 DEEPSEEK_SUMMARY_MODEL 覆盖
+    max_output_tokens: int = 4096
+    request_timeout: float = 60.0
     
     # Processing settings
     concurrency: int = 8
@@ -49,7 +50,11 @@ class TranslatorConfig:
     def __post_init__(self):
         """Load API key from environment if not provided."""
         if self.api_key is None:
-            self.api_key = os.environ.get("DEEPSEEK_API_KEY")
+            self.api_key = self._default_api_key()
+
+    def _default_api_key(self) -> Optional[str]:
+        """Read the DeepSeek API key from environment variables."""
+        return os.environ.get("DEEPSEEK_API_KEY")
     
     @classmethod
     def from_args(cls, args) -> "TranslatorConfig":
@@ -71,9 +76,10 @@ class TranslatorConfig:
 
         return cls(
             api_key=api_key,
-            base_url=getattr(args, 'base_url', "https://api.deepseek.com"),
             model_name=model_name,
             summary_model_name=summary_model_name,
+            max_output_tokens=getattr(args, 'max_output_tokens', 4096),
+            request_timeout=getattr(args, 'request_timeout', 60.0),
             concurrency=getattr(args, 'concurrency', 8),
             chunk_size=getattr(args, 'chunk_size_for_translation', 10),
             context_window=getattr(args, 'context_window', 7),
@@ -91,6 +97,12 @@ class TranslatorConfig:
         """
         if not self.api_key:
             return "API key is required. Set DEEPSEEK_API_KEY or use --api-key"
+
+        if not self.model_name:
+            return "Model name is required"
+
+        if not self.summary_model_name:
+            return "Summary model name is required"
         
         if self.concurrency < 1 or self.concurrency > 50:
             return f"Concurrency must be 1-50, got {self.concurrency}"
@@ -100,7 +112,13 @@ class TranslatorConfig:
 
         if self.source_language not in {"en", "ja", "ko"}:
             return f"Source language must be one of en, ja, ko; got {self.source_language}"
-        
+
+        if self.max_output_tokens < 256 or self.max_output_tokens > 32768:
+            return f"Max output tokens must be 256-32768, got {self.max_output_tokens}"
+
+        if self.request_timeout < 5 or self.request_timeout > 600:
+            return f"Request timeout must be 5-600 seconds, got {self.request_timeout}"
+
         # Check for deprecated models
         if self.model_name in self.DEPRECATED_MODELS:
             logger.warning(

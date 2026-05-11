@@ -24,7 +24,6 @@ def mock_config():
     """Create a minimal config for testing."""
     return TranslatorConfig(
         api_key="test-key",
-        base_url="https://test.api.com",
         model_name="test-model",
         summary_model_name="test-model",
         chunk_size=2,
@@ -34,7 +33,7 @@ def mock_config():
 
 @pytest.fixture
 def mock_client():
-    """Create a mock AsyncOpenAI client."""
+    """Create a mock DeepSeek client."""
     client = MagicMock()
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]

@@ -47,6 +47,7 @@ Examples:
   %(prog)s video.srt -o output.srt       # Specify output
   %(prog)s video.srt -g glossary.txt     # Use glossary
   %(prog)s video.srt --no-merge          # Disable merging
+  %(prog)s video.srt --save-merged       # Save spaCy merged source subtitles
   %(prog)s video.srt --resume            # Resume interrupted translation
         """
     )
@@ -66,6 +67,8 @@ Examples:
     # Processing options
     parser.add_argument("-o", "--output", dest="output_path", help="Output SRT file path")
     parser.add_argument("--no-merge", action="store_true", help="Disable spaCy smart merging")
+    parser.add_argument("--save-merged", action="store_true", help="Save spaCy merged source subtitles")
+    parser.add_argument("--merged-output", dest="merged_output_path", help="Output path for spaCy merged source subtitles")
     parser.add_argument(
         "--source-language",
         choices=["en", "ja", "ko"],
@@ -76,10 +79,11 @@ Examples:
     parser.add_argument("--merge-gap", dest="merge_time_gap", type=float, default=1.5)
     
     # API options
-    parser.add_argument("--api-key", help="API key (or set DEEPSEEK_API_KEY)")
-    parser.add_argument("--base-url", default="https://api.deepseek.com")
+    parser.add_argument("--api-key", help="DeepSeek API key (or set DEEPSEEK_API_KEY)")
     parser.add_argument("--model", dest="model_name", default=None)
     parser.add_argument("--summary-model", dest="summary_model_name", default=None)
+    parser.add_argument("--max-output-tokens", type=int, default=4096)
+    parser.add_argument("--request-timeout", type=float, default=60.0)
     
     # Custom prompts
     parser.add_argument("--summary-prompt", help="自定义概括提示词（覆盖默认）")
@@ -156,6 +160,17 @@ async def main_async(args: argparse.Namespace) -> int:
             config.merge_time_gap,
             source_language=config.source_language,
         )
+
+    if args.save_merged or args.merged_output_path:
+        if getattr(args, "no_merge", False):
+            logger.warning("--save-merged ignored because smart merging is disabled")
+        else:
+            if args.merged_output_path:
+                merged_out_path = Path(args.merged_output_path).expanduser().resolve()
+            else:
+                merged_out_path = in_path.with_name(f"merged_{in_path.name}")
+            save_srt(merged_entries, merged_out_path)
+            logger.info(f"Saved spaCy merged subtitles to {merged_out_path}")
     
     # 进度管理
     progress_path = get_progress_file(in_path) if not args.no_progress else None
@@ -169,7 +184,7 @@ async def main_async(args: argparse.Namespace) -> int:
             logger.info("No previous progress found, starting fresh")
     
     # 创建 API 客户端
-    client = create_client(config.api_key, config.base_url)
+    client = create_client(config.api_key, timeout=config.request_timeout)
     
     # 初始化进度
     total_chunks = (len(merged_entries) + config.chunk_size - 1) // config.chunk_size

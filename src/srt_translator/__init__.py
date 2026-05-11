@@ -9,7 +9,7 @@ Features:
 - Progress saving and resume support
 """
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 __author__ = "wjin999"
 
 from .models import SrtEntry
@@ -21,12 +21,14 @@ from .text_utils import clean_translated_text, validate_translation
 from .config import TranslatorConfig
 from .progress import TranslationProgress, load_progress, save_progress_incremental
 from .pipeline import TranslationPipeline
+from .quality_checker import run_quality_check, align_originals_by_timeline, QualityIssue
 
 __all__ = [
     # Models
     "SrtEntry",
     "TranslationResult",
     "TranslationProgress",
+    "QualityIssue",
     "TranslatorConfig",
     "Glossary",
     # Parsing
@@ -42,6 +44,9 @@ __all__ = [
     "generate_context_summary",
     # Pipeline
     "TranslationPipeline",
+    # Quality check
+    "run_quality_check",
+    "align_originals_by_timeline",
     # Glossary
     "load_glossary",
     "load_glossary_from_string",

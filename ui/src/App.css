@@ -84,6 +84,10 @@ body {
   box-shadow: 0 2px 0 rgba(30, 181, 137, 0.2);
 }
 .ti8-btn-upload:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+.label-main {
+  display: block;
+  overflow-wrap: anywhere;
+}
 
 .ti8-execute {
   background: #111; border: 2px solid #333; color: #444;
@@ -149,6 +153,53 @@ body {
 }
 .field-group input:focus,
 .field-group select:focus { border-color: var(--ti8-green); }
+.field-group input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  padding-right: 52px;
+}
+.field-group input[type="number"]::-webkit-outer-spin-button,
+.field-group input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.number-control {
+  position: relative;
+}
+.number-control input {
+  box-sizing: border-box;
+  width: 100%;
+}
+.number-stepper {
+  bottom: 1px;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  width: 42px;
+}
+.number-stepper button {
+  background: #06110d;
+  border: 0;
+  border-left: 1px solid #1f3a31;
+  color: var(--ti8-green);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+}
+.number-stepper button:first-child {
+  border-bottom: 1px solid #1f3a31;
+}
+.number-stepper button:hover {
+  background: rgba(30, 181, 137, 0.15);
+  color: var(--ti8-gold);
+}
+.number-stepper button:active {
+  background: var(--ti8-green);
+  color: #000;
+}
 .checkbox-field { gap: 8px; }
 .checkbox-row {
   display: flex; align-items: center; gap: 10px; color: var(--ti8-green) !important;
@@ -229,4 +280,13 @@ textarea {
   color: var(--ti8-red);
   font-weight: bold;
   text-shadow: 0 0 5px rgba(255, 77, 77, 0.4);
+}
+
+@media (max-width: 640px) {
+  .card-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .settings-toggle { width: 100%; }
 }

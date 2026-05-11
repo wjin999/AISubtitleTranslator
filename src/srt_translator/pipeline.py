@@ -5,11 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Callable, Dict, List, Awaitable, Optional
-
-from openai import AsyncOpenAI
+from typing import Any, Callable, Dict, List, Awaitable, Optional
 
 from .config import TranslatorConfig
+from .llm_client import LLMCallError
 from .models import SrtEntry
 from .glossary import Glossary
 from .translator import (
@@ -35,7 +34,7 @@ class TranslationPipeline:
         self,
         entries: List[SrtEntry],
         glossary: Glossary,
-        client: AsyncOpenAI,
+        client: Any,
         progress: TranslationProgress | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         existing_summary: str | None = None,
@@ -49,7 +48,7 @@ class TranslationPipeline:
         Args:
             entries: Merged SrtEntry list (caller must merge first).
             glossary: Glossary instance for terminology matching.
-            client: Pre-configured AsyncOpenAI client.
+            client: Pre-configured DeepSeek client.
             progress: Progress tracker for resume support.
             on_progress: Progress callback receiving (chunk_index, progress_pct).
             existing_summary: Pre-existing summary for resume.
@@ -87,6 +86,7 @@ class TranslationPipeline:
             summary = await generate_context_summary(
                 truncated, client, config.summary_model_name,
                 custom_prompt=summary_prompt,
+                max_tokens=min(config.max_output_tokens, 2048),
             )
 
         # 4. Determine which chunks need translation
@@ -134,7 +134,7 @@ class TranslationPipeline:
         all_texts: List[str],
         summary: str,
         glossary: Glossary,
-        client: AsyncOpenAI,
+        client: Any,
         progress: TranslationProgress | None,
         sem: asyncio.Semaphore,
         ctx_window: int,
@@ -148,6 +148,8 @@ class TranslationPipeline:
             )
         except asyncio.CancelledError:
             raise
+        except LLMCallError:
+            raise
         except Exception as e:
             logger.error(f"Failed to translate chunk {chunk_idx}: {e}")
             return chunk_idx, {}
@@ -159,7 +161,7 @@ class TranslationPipeline:
         all_texts: List[str],
         summary: str,
         glossary: Glossary,
-        client: AsyncOpenAI,
+        client: Any,
         progress: TranslationProgress | None,
         sem: asyncio.Semaphore,
         ctx_window: int,
@@ -192,6 +194,7 @@ class TranslationPipeline:
             sem=sem,
             custom_translation_prompt=translation_prompt,
             translation_memory=self._translation_memory,
+            max_tokens=self.config.max_output_tokens,
         )
 
         chunk_translations: Dict[int, str] = {}

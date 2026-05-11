@@ -40,7 +40,6 @@ function load<T>(key: string, fallback: T): T {
 
 export function useSettings() {
   const [apiKey, setApiKey] = useState(() => load("apiKey", ""));
-  const [url, setUrl] = useState(() => load("url", DEF_URL));
   const [sumModel, setSumModel] = useState(() => load("sumModel", DEF_SUM_MODEL));
   const [transModel, setTransModel] = useState(() => load("transModel", DEF_TRANS_MODEL));
   const [sumPrompt, setSumPrompt] = useState(() => load("sumPrompt", _SUM_DEF));
@@ -48,8 +47,12 @@ export function useSettings() {
   const [savePath, setSavePath] = useState(() => load("savePath", ""));
   const [glossary, setGlossary] = useState(() => load("glossary", ""));
   const [concurrency, setConcurrency] = useState(() => load("concurrency", 8));
+  const [maxOutputTokens, setMaxOutputTokens] = useState(() => load("maxOutputTokens", 4096));
+  const [requestTimeout, setRequestTimeout] = useState(() => load("requestTimeout", 60));
   const [sourceLanguage, setSourceLanguage] = useState(() => load("sourceLanguage", "en"));
   const [mergeEnabled, setMergeEnabled] = useState(() => load("mergeEnabled", true));
+  const [saveMergedSubtitles, setSaveMergedSubtitles] = useState(() => load("saveMergedSubtitles", false));
+  const [qualityCheckEnabled, setQualityCheckEnabled] = useState(() => load("qualityCheckEnabled", true));
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -58,7 +61,6 @@ export function useSettings() {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       localStorage.setItem("apiKey", JSON.stringify(apiKey));
-      localStorage.setItem("url", JSON.stringify(url));
       localStorage.setItem("sumModel", JSON.stringify(sumModel));
       localStorage.setItem("transModel", JSON.stringify(transModel));
       localStorage.setItem("sumPrompt", JSON.stringify(sumPrompt));
@@ -66,17 +68,20 @@ export function useSettings() {
       localStorage.setItem("savePath", JSON.stringify(savePath));
       localStorage.setItem("glossary", JSON.stringify(glossary));
       localStorage.setItem("concurrency", JSON.stringify(concurrency));
+      localStorage.setItem("maxOutputTokens", JSON.stringify(maxOutputTokens));
+      localStorage.setItem("requestTimeout", JSON.stringify(requestTimeout));
       localStorage.setItem("sourceLanguage", JSON.stringify(sourceLanguage));
       localStorage.setItem("mergeEnabled", JSON.stringify(mergeEnabled));
+      localStorage.setItem("saveMergedSubtitles", JSON.stringify(saveMergedSubtitles));
+      localStorage.setItem("qualityCheckEnabled", JSON.stringify(qualityCheckEnabled));
     }, 500);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [apiKey, url, sumModel, transModel, sumPrompt, transPrompt, savePath, glossary, concurrency, sourceLanguage, mergeEnabled]);
+  }, [apiKey, sumModel, transModel, sumPrompt, transPrompt, savePath, glossary, concurrency, maxOutputTokens, requestTimeout, sourceLanguage, mergeEnabled, saveMergedSubtitles, qualityCheckEnabled]);
 
   const resetToDefaults = () => {
     setApiKey("");
-    setUrl(DEF_URL);
     setSumModel(DEF_SUM_MODEL);
     setTransModel(DEF_TRANS_MODEL);
     setSumPrompt(_SUM_DEF);
@@ -84,13 +89,16 @@ export function useSettings() {
     setSavePath("");
     setGlossary("");
     setConcurrency(8);
+    setMaxOutputTokens(4096);
+    setRequestTimeout(60);
     setSourceLanguage("en");
     setMergeEnabled(true);
+    setSaveMergedSubtitles(false);
+    setQualityCheckEnabled(true);
   };
 
   return {
     apiKey, setApiKey,
-    url, setUrl,
     sumModel, setSumModel,
     transModel, setTransModel,
     sumPrompt, setSumPrompt,
@@ -98,8 +106,12 @@ export function useSettings() {
     savePath, setSavePath,
     glossary, setGlossary,
     concurrency, setConcurrency,
+    maxOutputTokens, setMaxOutputTokens,
+    requestTimeout, setRequestTimeout,
     sourceLanguage, setSourceLanguage,
     mergeEnabled, setMergeEnabled,
+    saveMergedSubtitles, setSaveMergedSubtitles,
+    qualityCheckEnabled, setQualityCheckEnabled,
     resetToDefaults,
   };
 }

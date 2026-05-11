@@ -9,8 +9,6 @@ import logging
 from typing import List, Dict, Any, Optional, Mapping
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
-
 from .llm_client import call_llm_async
 from .glossary import find_matching_terms, Glossary
 from .text_utils import validate_translation
@@ -39,9 +37,10 @@ _SHARED_SUBTITLE_RULES = """## 字幕标点规范（必须严格遵守）：
 
 async def generate_context_summary(
     full_text: str,
-    client: AsyncOpenAI,
+    client: Any,
     model: str,
-    custom_prompt: str | None = None
+    custom_prompt: str | None = None,
+    max_tokens: int | None = None,
 ) -> str:
     """
     Generate a context summary for the subtitle content.
@@ -52,7 +51,7 @@ async def generate_context_summary(
     
     Args:
         full_text: The full text to summarize
-        client: AsyncOpenAI client
+        client: DeepSeek client
         model: Model name to use
         custom_prompt: Optional custom system prompt to override the default
     """
@@ -102,8 +101,8 @@ async def generate_context_summary(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": truncated}
         ],
-        temperature=0.3,
-        max_retries=2
+        max_retries=2,
+        max_tokens=max_tokens,
     )
     
     if content:
@@ -256,18 +255,19 @@ def _parse_translation_response(json_str: str, expected_count: int) -> Dict[int,
 
 
 async def _translate_single_retry(
-    client: AsyncOpenAI,
+    client: Any,
     model: str,
     original: str,
     global_summary: str,
     glossary: Glossary | Dict[str, str],
     context_prev: List[str] | None = None,
     context_next: List[str] | None = None,
+    max_tokens: int | None = None,
 ) -> str:
     """单条翻译重试（用于 chunk 翻译失败的条目）。
     
     Args:
-        client: AsyncOpenAI client.
+        client: DeepSeek client.
         model: Model name.
         original: Original text to translate.
         global_summary: Background summary for context.
@@ -316,16 +316,16 @@ async def _translate_single_retry(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        temperature=0.3,
         max_retries=2,
-        json_mode=False
+        json_mode=False,
+        max_tokens=max_tokens,
     )
     
     return result.strip() if result else ""
 
 
 async def translate_chunk_task(
-    client: AsyncOpenAI,
+    client: Any,
     chunk_data: List[Dict[str, Any]],
     context_prev: List[str],
     context_next: List[str],
@@ -336,6 +336,7 @@ async def translate_chunk_task(
     retry_failed: bool = True,
     custom_translation_prompt: str | None = None,
     translation_memory: Mapping[str, str] | None = None,
+    max_tokens: int | None = 4096,
 ) -> List[TranslationResult]:
     """
     Translate a chunk of subtitle entries.
@@ -370,10 +371,9 @@ async def translate_chunk_task(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.3,
             max_retries=3,
             json_mode=True,
-            max_tokens=4096,
+            max_tokens=max_tokens,
         )
         
         translated_map = _parse_translation_response(json_str, len(chunk_data))
@@ -426,6 +426,7 @@ async def translate_chunk_task(
                     client, model, original, global_summary, glossary,
                     context_prev=context_prev,
                     context_next=context_next,
+                    max_tokens=max_tokens,
                 )
                 return i, retried
 

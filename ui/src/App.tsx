@@ -43,24 +43,31 @@ function App() {
             status={status} setStatus={setStatus}
             isError={isError} setIsError={setIsError}
             logs={logs} setLogs={setLogs}
-            apiKey={settings.apiKey} url={settings.url}
+            apiKey={settings.apiKey}
             sumModel={settings.sumModel} transModel={settings.transModel}
             sumPrompt={settings.sumPrompt} transPrompt={settings.transPrompt}
             savePath={settings.savePath} glossary={settings.glossary}
             concurrency={settings.concurrency}
+            maxOutputTokens={settings.maxOutputTokens}
+            requestTimeout={settings.requestTimeout}
             sourceLanguage={settings.sourceLanguage}
             mergeEnabled={settings.mergeEnabled}
+            saveMergedSubtitles={settings.saveMergedSubtitles}
+            qualityCheckEnabled={settings.qualityCheckEnabled}
           />
         ) : (
           <SettingsPanel
             apiKey={settings.apiKey} setApiKey={settings.setApiKey}
-            url={settings.url} setUrl={settings.setUrl}
             sumModel={settings.sumModel} setSumModel={settings.setSumModel}
             transModel={settings.transModel} setTransModel={settings.setTransModel}
             savePath={settings.savePath} setSavePath={settings.setSavePath}
             concurrency={settings.concurrency} setConcurrency={settings.setConcurrency}
+            maxOutputTokens={settings.maxOutputTokens} setMaxOutputTokens={settings.setMaxOutputTokens}
+            requestTimeout={settings.requestTimeout} setRequestTimeout={settings.setRequestTimeout}
             sourceLanguage={settings.sourceLanguage} setSourceLanguage={settings.setSourceLanguage}
             mergeEnabled={settings.mergeEnabled} setMergeEnabled={settings.setMergeEnabled}
+            saveMergedSubtitles={settings.saveMergedSubtitles} setSaveMergedSubtitles={settings.setSaveMergedSubtitles}
+            qualityCheckEnabled={settings.qualityCheckEnabled} setQualityCheckEnabled={settings.setQualityCheckEnabled}
             setActiveModal={setActiveModal}
             resetToDefaults={settings.resetToDefaults}
           />

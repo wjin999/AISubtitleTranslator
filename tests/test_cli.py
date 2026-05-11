@@ -23,9 +23,10 @@ class TestParseArguments:
         assert args.glossary_path is None
         assert args.max_chars_per_entry == 300
         assert args.no_merge is False
+        assert args.save_merged is False
+        assert args.merged_output_path is None
         assert args.source_language == "en"
         assert args.api_key is None
-        assert args.base_url == "https://api.deepseek.com"
         assert args.model_name is None
         assert args.concurrency == 8
         assert args.verbose is False
@@ -36,11 +37,12 @@ class TestParseArguments:
             "srt-translator", "input.srt", "output.srt",
             "-g", "glossary.txt",
             "--no-merge",
+            "--save-merged",
+            "--merged-output", "merged.srt",
             "--source-language", "ja",
             "--max-chars", "200",
             "--merge-gap", "2.0",
             "--api-key", "test-key",
-            "--base-url", "https://custom.api.com",
             "--model", "custom-model",
             "--summary-model", "custom-summary-model",
             "--concurrency", "16",
@@ -56,10 +58,11 @@ class TestParseArguments:
         assert args.glossary_path == "glossary.txt"
         assert args.max_chars_per_entry == 200
         assert args.no_merge is True
+        assert args.save_merged is True
+        assert args.merged_output_path == "merged.srt"
         assert args.source_language == "ja"
         assert args.merge_time_gap == 2.0
         assert args.api_key == "test-key"
-        assert args.base_url == "https://custom.api.com"
         assert args.model_name == "custom-model"
         assert args.summary_model_name == "custom-summary-model"
         assert args.concurrency == 16
@@ -103,7 +106,6 @@ class TestMainAsync:
         args.max_chars_per_entry = 300
         args.merge_time_gap = 1.5
         args.api_key = "test-key"
-        args.base_url = "https://test.api.com"
         args.model_name = "test-model"
         args.summary_model_name = "test-model"
         args.concurrency = 2
@@ -111,6 +113,8 @@ class TestMainAsync:
         args.resume = False
         args.no_progress = True
         args.no_merge = False
+        args.save_merged = False
+        args.merged_output_path = None
         args.verbose = False
         args.summary_prompt = None
         args.translation_prompt = None

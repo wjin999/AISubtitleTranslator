@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 title AISubtitleTranslator - Release Build
 
-set APP_VERSION=1.0.2
+set APP_VERSION=1.1.0
 set RELEASE_DIR=release\%APP_VERSION%
 
 echo ============================================

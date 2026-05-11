@@ -8,7 +8,7 @@ from typing import List, Dict, Optional
 from enum import Enum
 
 from openai import (
-    AsyncOpenAI, 
+    AsyncOpenAI as DeepSeekClient,
     APIConnectionError, 
     RateLimitError,
     AuthenticationError,
@@ -17,6 +17,10 @@ from openai import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class LLMCallError(RuntimeError):
+    """Raised when an LLM API call fails after retry handling."""
 
 
 class APIErrorType(Enum):
@@ -54,10 +58,9 @@ def classify_error(error: Exception) -> tuple[APIErrorType, bool]:
 
 
 async def call_llm_async(
-    client: AsyncOpenAI,
+    client: DeepSeekClient,
     model: str,
     messages: List[Dict[str, str]],
-    temperature: float = 0.3,
     max_retries: int = 3,
     json_mode: bool = False,
     max_tokens: int | None = None,
@@ -66,10 +69,9 @@ async def call_llm_async(
     Make async call to LLM API with retry logic.
     
     Args:
-        client: AsyncOpenAI client instance
+        client: DeepSeek client instance
         model: Model name to use
         messages: List of message dictionaries
-        temperature: Sampling temperature
         max_retries: Maximum retry attempts
         json_mode: Whether to request JSON response format
         max_tokens: Maximum output tokens (important for JSON mode to prevent truncation)
@@ -83,8 +85,7 @@ async def call_llm_async(
         try:
             params: Dict = {
                 "model": model, 
-                "messages": messages, 
-                "temperature": temperature,
+                "messages": messages,
             }
             if json_mode:
                 params["response_format"] = {"type": "json_object"}
@@ -118,12 +119,13 @@ async def call_llm_async(
     
     if last_error:
         logger.error(f"All {max_retries} retries failed. Last error: {last_error}")
+        raise LLMCallError(f"LLM API call failed: {last_error}") from last_error
     
     return ""
 
 
 async def call_llm_with_fallback(
-    client: AsyncOpenAI,
+    client: DeepSeekClient,
     models: List[str],
     messages: List[Dict[str, str]],
     **kwargs
@@ -132,7 +134,7 @@ async def call_llm_with_fallback(
     Try multiple models in sequence until one succeeds.
     
     Args:
-        client: AsyncOpenAI client
+        client: DeepSeek client
         models: List of model names to try
         messages: Messages to send
         **kwargs: Additional arguments for call_llm_async
@@ -151,10 +153,10 @@ async def call_llm_with_fallback(
 def create_client(
     api_key: str | None,
     base_url: str = "https://api.deepseek.com",
-    timeout: float = 60.0
-) -> AsyncOpenAI:
+    timeout: float = 60.0,
+) -> DeepSeekClient:
     """
-    Create an AsyncOpenAI client.
+    Create a client for the DeepSeek API.
     
     Args:
         api_key: API key for authentication
@@ -162,9 +164,9 @@ def create_client(
         timeout: Default timeout for requests
         
     Returns:
-        Configured AsyncOpenAI client
+        Configured DeepSeek client
     """
-    return AsyncOpenAI(
+    return DeepSeekClient(
         api_key=api_key, 
         base_url=base_url,
         timeout=timeout,

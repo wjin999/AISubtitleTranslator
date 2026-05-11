@@ -22,7 +22,6 @@ interface Props {
   logs: LogEntry[];
   setLogs: Dispatch<SetStateAction<LogEntry[]>>;
   apiKey: string;
-  url: string;
   sumModel: string;
   transModel: string;
   sumPrompt: string;
@@ -30,17 +29,22 @@ interface Props {
   savePath: string;
   glossary: string;
   concurrency: number;
+  maxOutputTokens: number;
+  requestTimeout: number;
   sourceLanguage: string;
   mergeEnabled: boolean;
+  saveMergedSubtitles: boolean;
+  qualityCheckEnabled: boolean;
 }
 
 export default function TranslationView(props: Props) {
   const {
     file, setFile, isWorking, setIsWorking, progress, setProgress,
     status, setStatus, isError, setIsError, logs, setLogs,
-    apiKey, url, sumModel, transModel,
+    apiKey, sumModel, transModel,
     sumPrompt, transPrompt, savePath, glossary, concurrency,
-    sourceLanguage, mergeEnabled,
+    maxOutputTokens, requestTimeout,
+    sourceLanguage, mergeEnabled, saveMergedSubtitles, qualityCheckEnabled,
   } = props;
 
   const logsContainerRef = useRef<HTMLDivElement>(null);
@@ -109,7 +113,6 @@ export default function TranslationView(props: Props) {
     const form = new FormData();
     form.append("file", file);
     form.append("api_key", apiKey);
-    form.append("base_url", url);
     form.append("summary_model_name", sumModel);
     form.append("model_name", transModel);
     form.append("summary_prompt", sumPrompt);
@@ -117,8 +120,12 @@ export default function TranslationView(props: Props) {
     form.append("save_path", savePath);
     form.append("glossary", glossary);
     form.append("concurrency", String(concurrency));
+    form.append("max_output_tokens", String(maxOutputTokens));
+    form.append("request_timeout", String(requestTimeout));
     form.append("source_language", sourceLanguage);
     form.append("merge_enabled", String(mergeEnabled));
+    form.append("save_merged_subtitles", String(saveMergedSubtitles));
+    form.append("quality_check_enabled", String(qualityCheckEnabled));
 
     try {
       const res = await fetch(`${BACKEND_BASE}/api/translate`, { method: "POST", body: form });
@@ -154,7 +161,7 @@ export default function TranslationView(props: Props) {
               stopPolling();
               setProgress(100);
               setIsWorking(false);
-              setStatus("翻译完成！");
+              setStatus(qualityCheckEnabled ? "翻译与质检完成！" : "翻译完成！");
               break;
             case "cancelled":
               stopPolling();
@@ -163,7 +170,11 @@ export default function TranslationView(props: Props) {
               break;
             default:
               setProgress(statusData.progress || 0);
-              setStatus(`正在翻译... ${statusData.progress || 0}%`);
+              if (qualityCheckEnabled && (statusData.progress || 0) >= 80) {
+                setStatus(`正在质检... ${statusData.progress || 0}%`);
+              } else {
+                setStatus(`正在翻译... ${statusData.progress || 0}%`);
+              }
           }
         } catch {
           stopPolling();

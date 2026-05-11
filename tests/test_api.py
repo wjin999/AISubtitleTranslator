@@ -50,9 +50,9 @@ class TestTranslateEndpoint:
                     files={"file": ("test.srt", f, "application/octet-stream")},
                     data={
                         "api_key": "test-key",
-                        "base_url": "https://test.api.com",
                         "model_name": "test-model",
                         "concurrency": "2",
+                        "save_merged_subtitles": "true",
                     },
                 )
 
@@ -61,6 +61,9 @@ class TestTranslateEndpoint:
             assert data["status"] == "success"
             assert "job_id" in data
             assert "expected_output" in data
+            assert "expected_merged_output" in data
+            assert Path(data["expected_merged_output"]).name == "merged_test.srt"
+            assert mock_process.call_args.args[9] is True
 
             # Verify JOB_STATE was created
             job_id = data["job_id"]
@@ -96,6 +99,42 @@ class TestTranslateEndpoint:
         # Cleanup
         for i in range(6):
             JOB_STATE.pop(f"existing-{i}", None)
+
+
+class TestQualityCheckEndpoint:
+    """Test the /api/quality-check endpoint."""
+
+    def test_quality_check_with_mock_files(self, client, tmp_path):
+        original = tmp_path / "original.srt"
+        translated = tmp_path / "translated.srt"
+        original.write_text("1\n00:00:01,000 --> 00:00:03,000\nHello world\n", encoding="utf-8")
+        translated.write_text("1\n00:00:01,000 --> 00:00:03,000\n你好\n", encoding="utf-8")
+
+        with patch("api_server.process_quality_check_job", new_callable=AsyncMock):
+            with open(original, "rb") as original_f, open(translated, "rb") as translated_f:
+                response = client.post(
+                    "/api/quality-check",
+                    files={
+                        "original_file": ("original.srt", original_f, "application/octet-stream"),
+                        "translated_file": ("translated.srt", translated_f, "application/octet-stream"),
+                    },
+                    data={
+                        "api_key": "test-key",
+                        "model_name": "test-model",
+                    },
+                )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "job_id" in data
+        assert "expected_output" in data
+
+        job_id = data["job_id"]
+        assert job_id in JOB_STATE
+
+        del JOB_STATE[job_id]
+        JOB_TASKS.pop(job_id, None)
 
 
 class TestStatusEndpoint:
